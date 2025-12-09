@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (Sound Switch)</title>
+    <title>2026 HAPPY HORSE RACE (v4)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -91,7 +91,7 @@
             cursor: pointer;
             margin: 5px;
             transition: transform 0.1s;
-            touch-action: manipulation;
+            touch-action: manipulation; /* ダブルタップズーム防止 */
         }
         button:active {
             transform: translateY(4px);
@@ -125,6 +125,7 @@
             border-radius: 50%;
             cursor: pointer;
             box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+            touch-action: manipulation;
         }
         .color-btn.selected { border: 3px solid #000; transform: scale(1.2); z-index: 10;}
         
@@ -139,10 +140,12 @@
         }
 
         #preview-canvas {
-            border: 2px dashed #999;
+            border: 4px solid #333; /* 枠線を強調 */
             margin: 5px auto;
             background: #fff;
             border-radius: 10px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+            /* キャンバス自体のサイズはHTML属性で指定 */
         }
 
         /* ゲーム内UI（タッチボタン等） */
@@ -178,6 +181,11 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
+            
+            /* 【修正】連打対策：ダブルタップによるズームなどを完全に無効化 */
+            touch-action: none !important; 
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
         .touch-btn:active, .touch-btn.active {
             transform: scale(0.95);
@@ -199,7 +207,7 @@
             margin: 0 auto;
         }
 
-        /* 追加: 音声切り替えボタン */
+        /* 音声切り替えボタン */
         #sound-switch {
             position: absolute;
             top: 15px;
@@ -219,15 +227,13 @@
             user-select: none;
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
             transition: transform 0.1s;
+            touch-action: manipulation;
         }
         #sound-switch:active {
             transform: scale(0.9);
         }
 
-        /* * =========================================
-         * 追加・修正: スマホ横画面対応用スタイル
-         * =========================================
-         */
+        /* 横画面対応用スタイル */
         #landscape-warning {
             display: none; /* デフォルトは非表示 */
             position: fixed;
@@ -259,7 +265,6 @@
             100% { transform: rotate(0deg); }
         }
 
-        /* 縦画面（ポートレート）の時のみ警告を表示し、ゲームを隠す */
         @media screen and (orientation: portrait) {
             #landscape-warning {
                 display: flex !important;
@@ -269,7 +274,6 @@
             }
         }
 
-        /* モバイルレイアウト調整 */
         @media screen and (max-height: 500px) {
             h1 { font-size: 1.5rem; margin-bottom: 5px; }
             .ui-content { padding: 10px; max-height: 95%; }
@@ -282,7 +286,7 @@
 </head>
 <body>
 
-    <!-- 追加: 横画面のお願いメッセージ -->
+    <!-- 横画面のお願いメッセージ -->
     <div id="landscape-warning">
         <div class="icon">📱 ⟲</div>
         <h2>端末を横にしてください</h2>
@@ -292,7 +296,7 @@
 <div id="game-wrapper">
     <canvas id="main-canvas" width="800" height="450"></canvas>
 
-    <!-- 追加: 音声切り替えボタン -->
+    <!-- 音声切り替えボタン -->
     <div id="sound-switch">🔊</div>
 
     <!-- タイトル画面 -->
@@ -324,11 +328,12 @@
 
     <!-- カスタマイズ画面 -->
     <div id="screen-customize" class="ui-layer hidden">
-        <div class="ui-content">
+        <div class="ui-content" style="min-width: 500px;">
             <h2>馬のカスタマイズ</h2>
-            <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start;">
                 <div style="margin: 10px;">
-                    <canvas id="preview-canvas" width="100" height="100"></canvas>
+                    <!-- プレビュー (300x200) -->
+                    <canvas id="preview-canvas" width="300" height="200"></canvas>
                     <div id="ability-desc">能力: スピードアップ</div>
                 </div>
                 <div>
@@ -397,7 +402,7 @@
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * Sound & Responsive Update with Mute Switch
+ * v4 Update: Preview Fix & Remove Prize Info from Mode Screen
  */
 
 // --- 設定・定数 ---
@@ -429,16 +434,12 @@ function resizeGame() {
 
     let scale;
     if (winAspect > gameAspect) {
-        // 画面が横長すぎる場合、高さに合わせる
         scale = winH / CONFIG.CANVAS_HEIGHT;
     } else {
-        // 画面が縦長すぎる場合、幅に合わせる
         scale = winW / CONFIG.CANVAS_WIDTH;
     }
 
     wrapper.style.transform = `scale(${scale})`;
-    // スケールしても画面中央に来るようにする（flexboxと組み合わせて）
-    // scaleは要素のサイズ自体は変えず見た目だけ変えるので、余白調整等は親のflexで吸収
 }
 window.addEventListener('resize', resizeGame);
 window.addEventListener('load', resizeGame);
@@ -446,11 +447,11 @@ window.addEventListener('load', resizeGame);
 
 // --- 色と能力の定義 ---
 const ABILITIES = {
-    "#ffff00": { type: "stamina", name: "無限の体力", staminaSave: 0.2, desc: "スタミナ消費が激減" },
+    "#ffff00": { type: "stamina", name: "無限の体力", staminaSave: 0.1, desc: "スタミナ消費が激減" },
     "#ffd700": { type: "stamina", name: "ゴールデンラング", staminaSave: 0.4, desc: "スタミナ消費がかなり少ない" },
     "#f0e68c": { type: "stamina", name: "タフネス", staminaSave: 0.6, desc: "スタミナ消費が少ない" },
-    "#ffa500": { type: "speed", name: "スピードスター", speedBonus: 1.3, desc: "基本速度がかなり速い" },
-    "#ff4500": { type: "speed", name: "ラピッド", speedBonus: 1.2, desc: "基本速度が速い" },
+    "#ffa500": { type: "speed", name: "スピードスター", speedBonus: 1.8, desc: "基本速度がかなり速い" },
+    "#ff4500": { type: "speed", name: "ラピッド", speedBonus: 1.4, desc: "基本速度が速い" },
     "#ff8c00": { type: "speed", name: "クイック", speedBonus: 1.15, desc: "基本速度が少し速い" },
     "#0000ff": { type: "double_jump", name: "ダブルジャンプ", jumps: 2, desc: "2段ジャンプが可能" },
     "#1e90ff": { type: "triple_jump", name: "トリプルジャンプ", jumps: 3, desc: "3段ジャンプが可能" },
@@ -458,11 +459,11 @@ const ABILITIES = {
     "#800080": { type: "penta_jump", name: "月歩", jumps: 5, desc: "5段ジャンプが可能" },
     "#00ffff": { type: "fly", name: "スカイハイ", desc: "ジャンプ中に浮遊できる" },
     "#afeeee": { type: "fly", name: "グライダー", desc: "ゆっくり滑空できる" },
-    "#00ff00": { type: "high_jump", name: "バッタジャンプ", jumpBonus: 1.5, desc: "ジャンプ力が1.5倍" },
-    "#32cd32": { type: "high_jump", name: "カエル", jumpBonus: 1.3, desc: "ジャンプ力が1.3倍" },
-    "#000000": { type: "giant", name: "ギガント", scale: 1.5, desc: "体が元から大きい" },
+    "#00ff00": { type: "high_jump", name: "バッタジャンプ", jumpBonus: 7, desc: "ジャンプ力がめちゃ高い" },
+    "#32cd32": { type: "high_jump", name: "カエル", jumpBonus: 1.5, desc: "ジャンプ力が高い" },
+    "#000000": { type: "giant", name: "ギガント", scale: 3, desc: "体が元から大きい" },
     "#2f4f4f": { type: "giant", name: "ビッグ", scale: 1.3, desc: "体が少し大きい" },
-    "#ffffff": { type: "mini", name: "ドワーフ", scale: 0.6, desc: "体が元から小さい" },
+    "#ffffff": { type: "mini", name: "ドワーフ", scale: 0.3, desc: "体が元から小さい" },
     "#f5f5f5": { type: "mini", name: "スモール", scale: 0.8, desc: "体が少し小さい" },
     "#8a2be2": { type: "ghost", name: "ゴースト", desc: "敵と障害物をすり抜ける" },
     "#4b0082": { type: "ghost", name: "ファントム", desc: "敵と障害物をすり抜ける" },
@@ -480,36 +481,30 @@ const ABILITIES = {
 };
 const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
 
-// --- 音声生成マネージャー (Web Audio API) ---
+// --- 音声生成マネージャー ---
 class Synthesizer {
     constructor() {
         this.ctx = null;
         this.isMuted = false;
-        this.bgmOscs = [];
         this.bgmTimer = null;
     }
 
-    // 初期化および再開処理
     init() {
         if (!this.ctx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.ctx = new AudioContext();
         }
-        // コンテキストが停止中なら再開を試みる
         if (this.ctx.state === 'suspended') {
             this.ctx.resume();
         }
     }
 
-    // ミュート切り替え
     toggleMute() {
         this.isMuted = !this.isMuted;
         this.updateBtn();
         if (this.isMuted) {
-            this.stopBGM(); // ミュートしたら即座にBGM停止
+            this.stopBGM();
         } else {
-            // ミュート解除時、もしレース中ならBGM再開させる等の処理が必要だが
-            // 複雑になるため今回は次のアクションから音が鳴る形式にする
             if (window.Game && window.Game.state === 'RACE' && window.Game.race && !window.Game.race.finished && !window.Game.race.isCountingDown) {
                 this.startRaceBGM();
             }
@@ -537,10 +532,8 @@ class Synthesizer {
         gain.connect(this.ctx.destination);
         osc.start(t);
         osc.stop(t + duration);
-        return osc;
     }
 
-    // 効果音: ジャンプ
     playJump() {
         if (!this.ctx || this.isMuted) return;
         const t = this.ctx.currentTime;
@@ -556,12 +549,10 @@ class Synthesizer {
         osc.stop(t + 0.2);
     }
 
-    // 効果音: ダッシュ
     playDash() {
         this.playTone(100, 'sawtooth', 0.1, 0.05);
     }
 
-    // 効果音: アイテム取得
     playItem(type) {
         if (!this.ctx || this.isMuted) return;
         if (type === 'bad') {
@@ -573,7 +564,6 @@ class Synthesizer {
         }
     }
 
-    // 効果音: 衝突
     playHit() {
         if (!this.ctx || this.isMuted) return;
         const t = this.ctx.currentTime;
@@ -590,7 +580,6 @@ class Synthesizer {
         osc.stop(t + 0.3);
     }
 
-    // 効果音: ショット
     playShoot() {
         if (!this.ctx || this.isMuted) return;
         const t = this.ctx.currentTime;
@@ -601,14 +590,11 @@ class Synthesizer {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(800, t);
         osc.frequency.exponentialRampToValueAtTime(100, t + 0.2);
-        
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(1000, t);
         filter.frequency.linearRampToValueAtTime(100, t + 0.2);
-
         gain.gain.setValueAtTime(0.1, t);
         gain.gain.linearRampToValueAtTime(0, t + 0.2);
-
         osc.connect(filter);
         filter.connect(gain);
         gain.connect(this.ctx.destination);
@@ -616,12 +602,11 @@ class Synthesizer {
         osc.stop(t + 0.2);
     }
 
-    // BGM: ファンファーレ
     playFanfare() {
         if (!this.ctx || this.isMuted) return;
         this.stopBGM();
         const now = this.ctx.currentTime;
-        const melody = [523, 523, 523, 659, 783, 783, 659, 783, 1046]; // C C C E G G E G C
+        const melody = [523, 523, 523, 659, 783, 783, 659, 783, 1046];
         const lens =   [0.1, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.8];
         let t = now;
         melody.forEach((freq, i) => {
@@ -630,19 +615,14 @@ class Synthesizer {
         });
     }
 
-    // BGM: レース中 (ループ)
     startRaceBGM() {
         if (!this.ctx || this.isMuted) return;
         this.stopBGM();
-        
         let beat = 0;
-        const bassNotes = [110, 110, 146, 146, 130, 130, 98, 98]; // A D C G
-        
+        const bassNotes = [110, 110, 146, 146, 130, 130, 98, 98];
         const loop = () => {
-            if (this.isMuted) return; // ループ内で再チェック
+            if (this.isMuted) return;
             const t = this.ctx.currentTime;
-            
-            // ベースライン
             const note = bassNotes[Math.floor(beat/4) % bassNotes.length];
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
@@ -654,14 +634,11 @@ class Synthesizer {
             gain.connect(this.ctx.destination);
             osc.start(t);
             osc.stop(t + 0.2);
-
-            // ハイハット的なノイズは複雑なので省略し、矩形波でリズム
             if (beat % 2 === 0) {
                  this.playTone(800, 'square', 0.05, 0.02);
             }
-
             beat++;
-            this.bgmTimer = setTimeout(loop, 125); // BPM 120 approx (8th notes)
+            this.bgmTimer = setTimeout(loop, 125);
         };
         loop();
     }
@@ -672,21 +649,15 @@ class Synthesizer {
 }
 const Sound = new Synthesizer();
 
-/**
- * 【追加】スマホ用音声ロック解除処理
- * ユーザーが最初に画面に触れた瞬間にAudioContextをresumeする
- */
 function enableAudioOnFirstTouch() {
     const unlock = () => {
         Sound.init();
-        // 一度実行したらイベントリスナーを削除
         document.removeEventListener('touchstart', unlock);
         document.removeEventListener('click', unlock);
     };
     document.addEventListener('touchstart', unlock);
     document.addEventListener('click', unlock);
 }
-// ページ読み込み完了時に設定
 window.addEventListener('load', enableAudioOnFirstTouch);
 
 
@@ -720,17 +691,13 @@ class GameEngine {
         window.addEventListener('keydown', (e) => handleInput(e.code, true));
         window.addEventListener('keyup', (e) => handleInput(e.code, false));
 
-        // スマホ用 (Touch Events)
         const setupTouch = (id, prop) => {
             const btn = document.getElementById(id);
             btn.addEventListener('touchstart', (e) => { 
                 e.preventDefault(); 
                 this.input[prop] = true;
                 btn.classList.add('active');
-                
-                // タッチボタンを押したときも念のためAudio再開を試みる
                 Sound.init();
-
                 if (prop === 'dash' && this.state === 'RACE') Sound.playDash();
             });
             btn.addEventListener('touchend', (e) => { 
@@ -743,10 +710,9 @@ class GameEngine {
         setupTouch('btn-dash', 'dash');
         setupTouch('btn-fire', 'action');
 
-        // サウンドボタン
         document.getElementById('sound-switch').addEventListener('click', (e) => {
-            e.stopPropagation(); // 他のクリックイベントに波及しないように
-            Sound.init(); // ボタンを押した時点でコンテキストも起こす
+            e.stopPropagation();
+            Sound.init();
             Sound.toggleMute();
         });
     }
@@ -766,7 +732,6 @@ class GameEngine {
             document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
         }
         
-        // 画面遷移時もAudioを初期化（クリックイベントなどで呼ばれるため有効）
         Sound.init();
     }
 
@@ -774,8 +739,6 @@ class GameEngine {
         this.changeState('RACE');
         this.race = new RaceSession(this, mode, this.playerConfig);
         Sound.stopBGM();
-        // Countdown sound logic inside RaceSession
-        
         if (this.loopId) cancelAnimationFrame(this.loopId);
         this.loop();
     }
@@ -794,10 +757,21 @@ class GameEngine {
         const pCtx = pCanvas.getContext('2d');
         const render = () => {
             if (this.state === 'CUSTOMIZE') {
-                pCtx.clearRect(0, 0, 100, 100);
-                pCtx.fillStyle = "#eee";
-                pCtx.fillRect(0,0,100,100);
-                drawHorse(pCtx, 50, 70, this.playerConfig, Date.now()/100, 0.5);
+                // 【修正】プレビュー描画調整
+                // 300x200 のCanvas
+                pCtx.clearRect(0, 0, 300, 200);
+                pCtx.fillStyle = "#fff";
+                pCtx.fillRect(0,0,300,200);
+                
+                // グリッド線
+                pCtx.strokeStyle = "#eee";
+                pCtx.beginPath();
+                for(let i=0; i<300; i+=20) { pCtx.moveTo(i,0); pCtx.lineTo(i,200); }
+                for(let i=0; i<200; i+=20) { pCtx.moveTo(0,i); pCtx.lineTo(300,i); }
+                pCtx.stroke();
+
+                // 馬を少し縮小(1.7倍)して、位置を少し上に(130)調整して全体が入るようにする
+                drawHorse(pCtx, 100, 50, this.playerConfig, Date.now()/100, 2.5);
             }
             requestAnimationFrame(render);
         };
@@ -817,14 +791,11 @@ class RaceSession {
         this.countDownTimer = 180;
         this.countDownText = "";
 
-        // ゴール地点
         this.goalX = CONFIG.BASE_SPEED * 60 * CONFIG.GAME_DURATION_SEC; 
 
-        // プレイヤー生成
         const startX = 100;
         this.player = new Horse(true, pConfig, startX, CONFIG.GROUND_Y);
         
-        // CPU生成
         this.cpus = [
             new Horse(false, {color: "#8b4513", headIdx:2, bodyIdx:2, legsIdx:0, ability: ABILITIES["#8b4513"]}, startX, CONFIG.GROUND_Y),
             new Horse(false, {color: "#ffa500", headIdx:1, bodyIdx:1, legsIdx:1, ability: ABILITIES["#ffa500"]}, startX, CONFIG.GROUND_Y)
@@ -832,12 +803,13 @@ class RaceSession {
         this.cpus[0].x = startX;
         this.cpus[1].x = startX;
         
+        // 敵の速度設定
         if (mode === 'GACHI') {
-            this.cpus[0].baseSpeedMod = 1.04; 
-            this.cpus[1].baseSpeedMod = 1.07; 
+            this.cpus[0].baseSpeedMod = 1.00; 
+            this.cpus[1].baseSpeedMod = 1.03; 
         } else {
-            this.cpus[0].baseSpeedMod = 0.95;
-            this.cpus[1].baseSpeedMod = 1.02;
+            this.cpus[0].baseSpeedMod = 0.90;
+            this.cpus[1].baseSpeedMod = 0.98;
         }
 
         this.entities = [];
@@ -897,7 +869,6 @@ class RaceSession {
 
         this.frame++;
         
-        // プレイヤー更新
         const effectiveInput = this.finished ? { up: false, dash: false, action: false } : input;
         const playerSpeedMod = this.finished ? 0.95 : 1.0;
         
@@ -915,7 +886,6 @@ class RaceSession {
         this.cameraX = this.player.x - 150;
         if (this.cameraX < 0) this.cameraX = 0;
 
-        // CPU AI
         this.cpus.forEach((cpu, i) => {
             let jump = false;
             let dash = false;
@@ -944,7 +914,7 @@ class RaceSession {
                         }
                         speedMod = 0.5; 
                         if (this.frame % 120 === 0) {
-                            const accidents = ["おっと！", "靴紐が...", "あ、UFOだ", "Zzz...", "腹痛が..."];
+                            const accidents = [ "トイレ行きたい", "あ、UFOだ", "Zzz...", "馬刺し食べて〜"];
                             const msg = accidents[Math.floor(Math.random() * accidents.length)];
                             this.addBubble(cpu.x, cpu.y - 60, msg, "#ff9");
                         }
@@ -954,7 +924,6 @@ class RaceSession {
             cpu.update({up: jump, dash: dash, action: false}, [], speedMod, this.frame);
         });
 
-        // 火の玉更新
         this.bullets.forEach(b => {
             b.x += b.vx; b.life--;
             this.entities.forEach(e => {
@@ -974,7 +943,6 @@ class RaceSession {
             if (e.type === 'enemy_moving' && e.alive) e.x += e.vx;
         });
 
-        // 衝突判定
         if (!this.finished) {
             this.entities.forEach(e => {
                 if (e.x < this.cameraX - 100 || e.x > this.cameraX + CONFIG.CANVAS_WIDTH + 100) return;
@@ -996,7 +964,6 @@ class RaceSession {
                         if (e.kind === 'bone') msg = "腐ってる...";
                         if (e.kind === 'big') msg = "巨大化!";
                         if (e.kind === 'small') msg = "ミニ化!";
-                        
                         Sound.playItem(e.kind === 'bone' ? 'bad' : 'good');
                         this.addBubble(this.player.x, this.player.y - 50, msg, e.kind==='bone'?'#999':'#0f0');
                     } else {
@@ -1080,7 +1047,13 @@ class RaceSession {
             document.getElementById('result-rank').innerText = `${rank}着！`;
             if (rank === 1) {
                 document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
-                document.getElementById('result-prize').innerText = "2026万";
+                
+                // 【修正】賞金の変更（隠し要素的に残す）
+                if (this.mode === 'GACHI') {
+                    document.getElementById('result-prize').innerText = "2026億";
+                } else {
+                    document.getElementById('result-prize').innerText = "2026万";
+                }
             } else {
                 document.getElementById('result-msg').innerText = "残念...";
                 document.getElementById('result-prize').innerText = "0";
@@ -1179,7 +1152,7 @@ class RaceSession {
             ctx.fillStyle = "rgba(255,255,255,0.9)";
             ctx.beginPath(); ctx.roundRect(b.x, b.y, 80, 26, 5); ctx.fill();
             ctx.fillStyle = "#000";
-            ctx.font = "14px bold sans-serif";
+            ctx.font = "18px bold sans-serif";
             ctx.fillText(b.text, b.x + 5, b.y + 18);
         });
 
@@ -1268,7 +1241,6 @@ class Horse {
         const ab = this.config.ability;
         const isGod = ab.type === 'god';
 
-        // 攻撃処理
         let shootReq = false;
         if (this.shootCooldown > 0) this.shootCooldown--;
         if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
@@ -1276,7 +1248,6 @@ class Horse {
             this.shootCooldown = 30; 
         }
 
-        // ダッシュ処理
         if (input.dash && this.stamina > 0) {
             let mult = CONFIG.DASH_SPEED_MULT;
             if (isGod) mult *= 2.0; 
@@ -1285,7 +1256,6 @@ class Horse {
             if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
             if (isGod) cost = 0; 
             this.stamina -= cost;
-            // ダッシュ音は連続しすぎないようにinput側で制御
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
             if(isGod) this.stamina = this.maxStamina;
