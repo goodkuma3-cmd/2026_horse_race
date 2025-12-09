@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (Sound & Responsive)</title>
+    <title>2026 HAPPY HORSE RACE (Sound Switch)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -199,19 +199,108 @@
             margin: 0 auto;
         }
 
+        /* 追加: 音声切り替えボタン */
+        #sound-switch {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            font-size: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 999; /* UIより前面に */
+            user-select: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        #sound-switch:active {
+            transform: scale(0.9);
+        }
+
+        /* * =========================================
+         * 追加・修正: スマホ横画面対応用スタイル
+         * =========================================
+         */
+        #landscape-warning {
+            display: none; /* デフォルトは非表示 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #111;
+            color: #fff;
+            z-index: 99999; /* 最前面 */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #landscape-warning .icon {
+            font-size: 50px;
+            margin-bottom: 20px;
+            animation: rotate-phone 2s infinite ease-in-out;
+        }
+
+        @keyframes rotate-phone {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-90deg); }
+            75% { transform: rotate(-90deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        /* 縦画面（ポートレート）の時のみ警告を表示し、ゲームを隠す */
+        @media screen and (orientation: portrait) {
+            #landscape-warning {
+                display: flex !important;
+            }
+            #game-wrapper {
+                display: none !important;
+            }
+        }
+
+        /* モバイルレイアウト調整 */
+        @media screen and (max-height: 500px) {
+            h1 { font-size: 1.5rem; margin-bottom: 5px; }
+            .ui-content { padding: 10px; max-height: 95%; }
+            button { padding: 8px 16px; margin: 3px; font-size: 0.9rem; }
+            h2 { font-size: 1.2rem; margin: 5px 0; }
+            p { font-size: 0.8rem; margin: 5px 0; }
+        }
+
     </style>
 </head>
 <body>
 
+    <!-- 追加: 横画面のお願いメッセージ -->
+    <div id="landscape-warning">
+        <div class="icon">📱 ⟲</div>
+        <h2>端末を横にしてください</h2>
+        <p>Please rotate your device<br>to play the game.</p>
+    </div>
+
 <div id="game-wrapper">
     <canvas id="main-canvas" width="800" height="450"></canvas>
+
+    <!-- 追加: 音声切り替えボタン -->
+    <div id="sound-switch">🔊</div>
 
     <!-- タイトル画面 -->
     <div id="screen-title" class="ui-layer">
         <div class="ui-content">
             <h1>2026 HAPPY HORSE RACE</h1>
             <p>自分で作った馬で走り抜けろ！<br>2026年 新春競馬アクション</p>
-            <p style="font-size: 0.8rem; color: #666;">※音が出ます</p>
+            <p style="font-size: 0.8rem; color: #666;">音が出ます。左上のボタンでOFFにできます。</p>
             <button onclick="Game.toCustomize()">ゲームスタート</button>
             <button class="secondary" onclick="Game.showHowTo()">遊び方</button>
         </div>
@@ -308,7 +397,7 @@
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * Sound & Responsive Update
+ * Sound & Responsive Update with Mute Switch
  */
 
 // --- 設定・定数 ---
@@ -400,13 +489,38 @@ class Synthesizer {
         this.bgmTimer = null;
     }
 
+    // 初期化および再開処理
     init() {
         if (!this.ctx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.ctx = new AudioContext();
         }
+        // コンテキストが停止中なら再開を試みる
         if (this.ctx.state === 'suspended') {
             this.ctx.resume();
+        }
+    }
+
+    // ミュート切り替え
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        this.updateBtn();
+        if (this.isMuted) {
+            this.stopBGM(); // ミュートしたら即座にBGM停止
+        } else {
+            // ミュート解除時、もしレース中ならBGM再開させる等の処理が必要だが
+            // 複雑になるため今回は次のアクションから音が鳴る形式にする
+            if (window.Game && window.Game.state === 'RACE' && window.Game.race && !window.Game.race.finished && !window.Game.race.isCountingDown) {
+                this.startRaceBGM();
+            }
+        }
+    }
+
+    updateBtn() {
+        const btn = document.getElementById('sound-switch');
+        if (btn) {
+            btn.innerText = this.isMuted ? "🔇" : "🔊";
+            btn.style.opacity = this.isMuted ? "0.5" : "1.0";
         }
     }
 
@@ -428,7 +542,7 @@ class Synthesizer {
 
     // 効果音: ジャンプ
     playJump() {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         const t = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -449,7 +563,7 @@ class Synthesizer {
 
     // 効果音: アイテム取得
     playItem(type) {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         if (type === 'bad') {
             this.playTone(150, 'sawtooth', 0.3, 0.1);
             this.playTone(100, 'sawtooth', 0.3, 0.1, 0.1);
@@ -461,7 +575,7 @@ class Synthesizer {
 
     // 効果音: 衝突
     playHit() {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         const t = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -478,7 +592,7 @@ class Synthesizer {
 
     // 効果音: ショット
     playShoot() {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         const t = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -504,7 +618,7 @@ class Synthesizer {
 
     // BGM: ファンファーレ
     playFanfare() {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         this.stopBGM();
         const now = this.ctx.currentTime;
         const melody = [523, 523, 523, 659, 783, 783, 659, 783, 1046]; // C C C E G G E G C
@@ -518,13 +632,14 @@ class Synthesizer {
 
     // BGM: レース中 (ループ)
     startRaceBGM() {
-        if (!this.ctx) return;
+        if (!this.ctx || this.isMuted) return;
         this.stopBGM();
         
         let beat = 0;
         const bassNotes = [110, 110, 146, 146, 130, 130, 98, 98]; // A D C G
         
         const loop = () => {
+            if (this.isMuted) return; // ループ内で再チェック
             const t = this.ctx.currentTime;
             
             // ベースライン
@@ -556,6 +671,23 @@ class Synthesizer {
     }
 }
 const Sound = new Synthesizer();
+
+/**
+ * 【追加】スマホ用音声ロック解除処理
+ * ユーザーが最初に画面に触れた瞬間にAudioContextをresumeする
+ */
+function enableAudioOnFirstTouch() {
+    const unlock = () => {
+        Sound.init();
+        // 一度実行したらイベントリスナーを削除
+        document.removeEventListener('touchstart', unlock);
+        document.removeEventListener('click', unlock);
+    };
+    document.addEventListener('touchstart', unlock);
+    document.addEventListener('click', unlock);
+}
+// ページ読み込み完了時に設定
+window.addEventListener('load', enableAudioOnFirstTouch);
 
 
 // --- ゲームエンジン ---
@@ -595,6 +727,10 @@ class GameEngine {
                 e.preventDefault(); 
                 this.input[prop] = true;
                 btn.classList.add('active');
+                
+                // タッチボタンを押したときも念のためAudio再開を試みる
+                Sound.init();
+
                 if (prop === 'dash' && this.state === 'RACE') Sound.playDash();
             });
             btn.addEventListener('touchend', (e) => { 
@@ -606,6 +742,13 @@ class GameEngine {
         setupTouch('btn-jump', 'up');
         setupTouch('btn-dash', 'dash');
         setupTouch('btn-fire', 'action');
+
+        // サウンドボタン
+        document.getElementById('sound-switch').addEventListener('click', (e) => {
+            e.stopPropagation(); // 他のクリックイベントに波及しないように
+            Sound.init(); // ボタンを押した時点でコンテキストも起こす
+            Sound.toggleMute();
+        });
     }
 
     changeState(newState) {
@@ -623,8 +766,8 @@ class GameEngine {
             document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
         }
         
-        // Audio Init trigger on any state change from title
-        if (newState !== 'TITLE') Sound.init();
+        // 画面遷移時もAudioを初期化（クリックイベントなどで呼ばれるため有効）
+        Sound.init();
     }
 
     startRace(mode) {
