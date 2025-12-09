@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2026 HAPPY HORSE RACE (Sound & Responsive)</title>
+    <style>
+        /* --- CSS スタイル定義 --- */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            color: #fff;
+            font-family: 'Verdana', sans-serif;
+            overflow: hidden; /* スクロール禁止 */
+            touch-action: none; /* スマホでのピンチズーム等を無効化 */
+            user-select: none;
+            -webkit-user-select: none;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 800px;  /* 基準サイズ */
+            height: 450px; /* 基準サイズ */
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UIオーバーレイ（共通） */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Canvasへのクリックを透過 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+
+        /* インタラクティブなUI要素はpointer-eventsを有効化 */
+        .ui-content {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            border: 4px solid #333;
+            color: #333;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        h1 { margin: 0 0 10px 0; color: #d32f2f; font-size: 1.8rem; }
+        h2 { margin: 10px 0; font-size: 1.4rem; }
+        p { margin: 10px 0; line-height: 1.5; font-size: 0.9rem;}
+
+        button {
+            background: #ff9800;
+            border: none;
+            border-bottom: 4px solid #e65100;
+            color: white;
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.1s;
+            touch-action: manipulation;
+        }
+        button:active {
+            transform: translateY(4px);
+            border-bottom: none;
+            margin-bottom: 9px; /* レイアウト崩れ防止 */
+        }
+        button.secondary { background: #4caf50; border-bottom-color: #1b5e20; }
+        button.danger { background: #f44336; border-bottom-color: #b71c1c; }
+
+        /* カスタマイズ画面用 */
+        .parts-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .part-group { text-align: center; }
+        .part-group button { padding: 5px 10px; font-size: 0.8rem; }
+        
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr); /* 10列 */
+            gap: 5px;
+            margin: 10px auto;
+            max-width: 350px;
+        }
+        .color-btn {
+            width: 25px;
+            height: 25px;
+            border: 2px solid #ccc;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+        }
+        .color-btn.selected { border: 3px solid #000; transform: scale(1.2); z-index: 10;}
+        
+        /* 隠しボタン用 */
+        .color-btn.secret {
+            background-color: transparent !important;
+            border: 2px solid transparent;
+            box-shadow: none;
+        }
+        .color-btn.secret.selected {
+            border: 3px solid #d32f2f; /* 選択時は赤枠で見えるようにする */
+        }
+
+        #preview-canvas {
+            border: 2px dashed #999;
+            margin: 5px auto;
+            background: #fff;
+            border-radius: 10px;
+        }
+
+        /* ゲーム内UI（タッチボタン等） */
+        #game-ui {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: auto;
+            height: auto;
+            pointer-events: auto;
+            z-index: 5;
+        }
+        .touch-controls {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            align-items: flex-end;
+        }
+        .touch-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border: 2px solid #fff;
+            color: #fff;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.9rem;
+            user-select: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .touch-btn:active, .touch-btn.active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.6);
+        }
+        #btn-dash { background: rgba(255, 165, 0, 0.5); }
+        #btn-fire { background: rgba(220, 20, 60, 0.6); display: none; width: 60px; height: 60px; font-size: 0.8rem; } 
+        #btn-jump { background: rgba(30, 144, 255, 0.5); width: 80px; height: 80px; font-size: 1rem; }
+
+        .hidden { display: none !important; }
+
+        /* 能力説明チップ */
+        #ability-desc {
+            font-weight: bold;
+            color: #1976d2;
+            min-height: 2.5em; /* 2行分確保 */
+            font-size: 0.85rem;
+            max-width: 250px;
+            margin: 0 auto;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <canvas id="main-canvas" width="800" height="450"></canvas>
+
+    <!-- タイトル画面 -->
+    <div id="screen-title" class="ui-layer">
+        <div class="ui-content">
+            <h1>2026 HAPPY HORSE RACE</h1>
+            <p>自分で作った馬で走り抜けろ！<br>2026年 新春競馬アクション</p>
+            <p style="font-size: 0.8rem; color: #666;">※音が出ます</p>
+            <button onclick="Game.toCustomize()">ゲームスタート</button>
+            <button class="secondary" onclick="Game.showHowTo()">遊び方</button>
+        </div>
+    </div>
+
+    <!-- 遊び方モーダル -->
+    <div id="screen-howto" class="ui-layer hidden">
+        <div class="ui-content" style="max-width: 600px;">
+            <h2>遊び方</h2>
+            <p><strong>PC操作:</strong><br>
+            [スペース] / [↑] : ジャンプ<br>
+            [→] 連打 : ダッシュ（スタミナ消費）<br>
+            [Z] / [Enter] : アクション（火の玉など）</p>
+            <p><strong>スマホ操作:</strong><br>
+            [JUMP] : ジャンプ<br>
+            [DASH] 連打 : ダッシュ<br>
+            [FIRE] : アクション（能力持ちのみ）</p>
+            <button onclick="Game.hideHowTo()">閉じる</button>
+        </div>
+    </div>
+
+    <!-- カスタマイズ画面 -->
+    <div id="screen-customize" class="ui-layer hidden">
+        <div class="ui-content">
+            <h2>馬のカスタマイズ</h2>
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">
+                <div style="margin: 10px;">
+                    <canvas id="preview-canvas" width="100" height="100"></canvas>
+                    <div id="ability-desc">能力: スピードアップ</div>
+                </div>
+                <div>
+                    <div class="parts-selector">
+                        <div class="part-group">
+                            <label>顔</label><br>
+                            <button onclick="Customizer.changePart('head', -1)">←</button>
+                            <span id="label-head">1</span>
+                            <button onclick="Customizer.changePart('head', 1)">→</button>
+                        </div>
+                        <div class="part-group">
+                            <label>体</label><br>
+                            <button onclick="Customizer.changePart('body', -1)">←</button>
+                            <span id="label-body">1</span>
+                            <button onclick="Customizer.changePart('body', 1)">→</button>
+                        </div>
+                        <div class="part-group">
+                            <label>足</label><br>
+                            <button onclick="Customizer.changePart('legs', -1)">←</button>
+                            <span id="label-legs">1</span>
+                            <button onclick="Customizer.changePart('legs', 1)">→</button>
+                        </div>
+                    </div>
+                    <div style="font-size:0.9rem;">カラー選択（能力が変わります）</div>
+                    <div class="color-grid" id="color-palette"></div>
+                </div>
+            </div>
+            <button onclick="Game.toModeSelect()">この馬で走る！</button>
+        </div>
+    </div>
+
+    <!-- モード選択画面 -->
+    <div id="screen-mode" class="ui-layer hidden">
+        <div class="ui-content">
+            <h2>難易度を選んでください</h2>
+            <button class="danger" onclick="Game.startGame('GACHI')">ガチステージ</button>
+            <p style="font-size: 0.8rem;">実力勝負。かなり難しいです。</p>
+            <br>
+            <button class="secondary" onclick="Game.startGame('HAPPY')">ハッピーステージ</button>
+            <p style="font-size: 0.8rem;">2026年をハッピーに。<br>ハッピーなアクシデントも...？</p>
+        </div>
+    </div>
+
+    <!-- ゲーム中UI (スマホ用) -->
+    <div id="game-ui">
+        <div class="touch-controls">
+            <div class="touch-btn" id="btn-fire">FIRE</div>
+            <div class="touch-btn" id="btn-dash">DASH</div>
+            <div class="touch-btn" id="btn-jump">JUMP</div>
+        </div>
+    </div>
+
+    <!-- リザルト画面 -->
+    <div id="screen-result" class="ui-layer hidden">
+        <div class="ui-content">
+            <h1 id="result-rank">1着</h1>
+            <h2 id="result-msg">2026 HAPPY NEW YEAR!!</h2>
+            <p style="font-size: 1.5rem; color: gold; text-shadow: 1px 1px 0 #000;">
+                賞金: <span id="result-prize">2026万</span>円
+            </p>
+            <button onclick="Game.toTitle()">もう一度遊ぶ</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * 2026 HAPPY HORSE RACE
+ * Sound & Responsive Update
+ */
+
+// --- 設定・定数 ---
+const CONFIG = {
+    CANVAS_WIDTH: 800,
+    CANVAS_HEIGHT: 450,
+    GRAVITY: 0.6,
+    JUMP_POWER: -12,
+    BASE_SPEED: 5,
+    DASH_SPEED_MULT: 1.6, 
+    TIRED_SPEED_MULT: 0.5,
+    MAX_STAMINA: 100,
+    STAMINA_COST_DASH: 1.0,
+    STAMINA_RECOVERY_BASE: 0.3,
+    STAMINA_RECOVERY_ITEM: 40,
+    GAME_DURATION_SEC: 30, 
+    GROUND_Y: 350
+};
+
+// --- レスポンシブ対応ロジック ---
+function resizeGame() {
+    const wrapper = document.getElementById('game-wrapper');
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    
+    // ゲームのアスペクト比 (16:9)
+    const gameAspect = CONFIG.CANVAS_WIDTH / CONFIG.CANVAS_HEIGHT;
+    const winAspect = winW / winH;
+
+    let scale;
+    if (winAspect > gameAspect) {
+        // 画面が横長すぎる場合、高さに合わせる
+        scale = winH / CONFIG.CANVAS_HEIGHT;
+    } else {
+        // 画面が縦長すぎる場合、幅に合わせる
+        scale = winW / CONFIG.CANVAS_WIDTH;
+    }
+
+    wrapper.style.transform = `scale(${scale})`;
+    // スケールしても画面中央に来るようにする（flexboxと組み合わせて）
+    // scaleは要素のサイズ自体は変えず見た目だけ変えるので、余白調整等は親のflexで吸収
+}
+window.addEventListener('resize', resizeGame);
+window.addEventListener('load', resizeGame);
+
+
+// --- 色と能力の定義 ---
+const ABILITIES = {
+    "#ffff00": { type: "stamina", name: "無限の体力", staminaSave: 0.2, desc: "スタミナ消費が激減" },
+    "#ffd700": { type: "stamina", name: "ゴールデンラング", staminaSave: 0.4, desc: "スタミナ消費がかなり少ない" },
+    "#f0e68c": { type: "stamina", name: "タフネス", staminaSave: 0.6, desc: "スタミナ消費が少ない" },
+    "#ffa500": { type: "speed", name: "スピードスター", speedBonus: 1.3, desc: "基本速度がかなり速い" },
+    "#ff4500": { type: "speed", name: "ラピッド", speedBonus: 1.2, desc: "基本速度が速い" },
+    "#ff8c00": { type: "speed", name: "クイック", speedBonus: 1.15, desc: "基本速度が少し速い" },
+    "#0000ff": { type: "double_jump", name: "ダブルジャンプ", jumps: 2, desc: "2段ジャンプが可能" },
+    "#1e90ff": { type: "triple_jump", name: "トリプルジャンプ", jumps: 3, desc: "3段ジャンプが可能" },
+    "#000080": { type: "quad_jump", name: "エアウォーク", jumps: 4, desc: "4段ジャンプが可能" },
+    "#800080": { type: "penta_jump", name: "月歩", jumps: 5, desc: "5段ジャンプが可能" },
+    "#00ffff": { type: "fly", name: "スカイハイ", desc: "ジャンプ中に浮遊できる" },
+    "#afeeee": { type: "fly", name: "グライダー", desc: "ゆっくり滑空できる" },
+    "#00ff00": { type: "high_jump", name: "バッタジャンプ", jumpBonus: 1.5, desc: "ジャンプ力が1.5倍" },
+    "#32cd32": { type: "high_jump", name: "カエル", jumpBonus: 1.3, desc: "ジャンプ力が1.3倍" },
+    "#000000": { type: "giant", name: "ギガント", scale: 1.5, desc: "体が元から大きい" },
+    "#2f4f4f": { type: "giant", name: "ビッグ", scale: 1.3, desc: "体が少し大きい" },
+    "#ffffff": { type: "mini", name: "ドワーフ", scale: 0.6, desc: "体が元から小さい" },
+    "#f5f5f5": { type: "mini", name: "スモール", scale: 0.8, desc: "体が少し小さい" },
+    "#8a2be2": { type: "ghost", name: "ゴースト", desc: "敵と障害物をすり抜ける" },
+    "#4b0082": { type: "ghost", name: "ファントム", desc: "敵と障害物をすり抜ける" },
+    "#ff0000": { type: "shoot", name: "ドラゴンブレス", desc: "Zキーで火の玉を発射！" },
+    "#dc143c": { type: "shoot", name: "ファイアボール", desc: "Zキーで火の玉を発射！" },
+    "#a0522d": { type: "accel", name: "スロースターター", desc: "最初は遅いが後半速くなる" },
+    "#8b4513": { type: "accel", name: "大器晩成", desc: "後半どんどん速くなる" },
+    "#c0c0c0": { type: "decel", name: "先行逃げ切り", desc: "最初は速いが後半バテる" },
+    "#d3d3d3": { type: "decel", name: "ロケットスタート", desc: "スタートダッシュ特化" },
+    "#adff2f": { type: "glass", name: "ガラスのエース", desc: "体力はないが超高速" },
+    "#556b2f": { type: "tank", name: "重戦車", desc: "遅いが体力は無限" },
+    "#ff69b4": { type: "double_jump", name: "アイドル", jumps: 2, desc: "2段ジャンプ" },
+    "#ffc0cb": { type: "high_jump", name: "ラビット", jumpBonus: 1.4, desc: "ジャンプ力高め" },
+    "SECRET": { type: "god", name: "伝説の馬", desc: "全てを兼ね備えた最強の馬" }
+};
+const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
+
+// --- 音声生成マネージャー (Web Audio API) ---
+class Synthesizer {
+    constructor() {
+        this.ctx = null;
+        this.isMuted = false;
+        this.bgmOscs = [];
+        this.bgmTimer = null;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    playTone(freq, type, duration, vol=0.1, startTime=0) {
+        if (!this.ctx || this.isMuted) return;
+        const t = this.ctx.currentTime + startTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(vol, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + duration);
+        return osc;
+    }
+
+    // 効果音: ジャンプ
+    playJump() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.linearRampToValueAtTime(600, t + 0.2);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.2);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.2);
+    }
+
+    // 効果音: ダッシュ
+    playDash() {
+        this.playTone(100, 'sawtooth', 0.1, 0.05);
+    }
+
+    // 効果音: アイテム取得
+    playItem(type) {
+        if (!this.ctx) return;
+        if (type === 'bad') {
+            this.playTone(150, 'sawtooth', 0.3, 0.1);
+            this.playTone(100, 'sawtooth', 0.3, 0.1, 0.1);
+        } else {
+            this.playTone(800, 'sine', 0.1, 0.1);
+            this.playTone(1200, 'sine', 0.1, 0.1, 0.1);
+        }
+    }
+
+    // 効果音: 衝突
+    playHit() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(100, t);
+        osc.frequency.exponentialRampToValueAtTime(10, t + 0.3);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.3);
+    }
+
+    // 効果音: ショット
+    playShoot() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, t);
+        osc.frequency.exponentialRampToValueAtTime(100, t + 0.2);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, t);
+        filter.frequency.linearRampToValueAtTime(100, t + 0.2);
+
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.2);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.2);
+    }
+
+    // BGM: ファンファーレ
+    playFanfare() {
+        if (!this.ctx) return;
+        this.stopBGM();
+        const now = this.ctx.currentTime;
+        const melody = [523, 523, 523, 659, 783, 783, 659, 783, 1046]; // C C C E G G E G C
+        const lens =   [0.1, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.8];
+        let t = now;
+        melody.forEach((freq, i) => {
+            this.playTone(freq, 'square', lens[i], 0.1, t - now);
+            t += lens[i];
+        });
+    }
+
+    // BGM: レース中 (ループ)
+    startRaceBGM() {
+        if (!this.ctx) return;
+        this.stopBGM();
+        
+        let beat = 0;
+        const bassNotes = [110, 110, 146, 146, 130, 130, 98, 98]; // A D C G
+        
+        const loop = () => {
+            const t = this.ctx.currentTime;
+            
+            // ベースライン
+            const note = bassNotes[Math.floor(beat/4) % bassNotes.length];
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = note;
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + 0.2);
+
+            // ハイハット的なノイズは複雑なので省略し、矩形波でリズム
+            if (beat % 2 === 0) {
+                 this.playTone(800, 'square', 0.05, 0.02);
+            }
+
+            beat++;
+            this.bgmTimer = setTimeout(loop, 125); // BPM 120 approx (8th notes)
+        };
+        loop();
+    }
+
+    stopBGM() {
+        if (this.bgmTimer) clearTimeout(this.bgmTimer);
+    }
+}
+const Sound = new Synthesizer();
+
+
+// --- ゲームエンジン ---
+class GameEngine {
+    constructor() {
+        this.canvas = document.getElementById('main-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.state = 'TITLE';
+        this.frame = 0;
+        this.loopId = null;
+        
+        this.input = { up: false, dash: false, action: false };
+        
+        this.playerConfig = {
+            headIdx: 0, bodyIdx: 0, legsIdx: 0,
+            color: "#800000", ability: ABILITIES["#800000"]
+        };
+
+        this.setupInput();
+        this.previewLoop();
+    }
+
+    setupInput() {
+        const handleInput = (key, pressed) => {
+            if (key === 'Space' || key === 'ArrowUp') this.input.up = pressed;
+            if (key === 'ArrowRight' || key === 'KeyD') this.input.dash = pressed;
+            if (key === 'KeyZ' || key === 'Enter') this.input.action = pressed;
+        };
+
+        window.addEventListener('keydown', (e) => handleInput(e.code, true));
+        window.addEventListener('keyup', (e) => handleInput(e.code, false));
+
+        // スマホ用 (Touch Events)
+        const setupTouch = (id, prop) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                this.input[prop] = true;
+                btn.classList.add('active');
+                if (prop === 'dash' && this.state === 'RACE') Sound.playDash();
+            });
+            btn.addEventListener('touchend', (e) => { 
+                e.preventDefault(); 
+                this.input[prop] = false;
+                btn.classList.remove('active');
+            });
+        };
+        setupTouch('btn-jump', 'up');
+        setupTouch('btn-dash', 'dash');
+        setupTouch('btn-fire', 'action');
+    }
+
+    changeState(newState) {
+        this.state = newState;
+        document.querySelectorAll('.ui-layer').forEach(el => el.classList.add('hidden'));
+        document.getElementById('game-ui').style.display = 'none';
+
+        if (newState === 'TITLE') document.getElementById('screen-title').classList.remove('hidden');
+        if (newState === 'CUSTOMIZE') document.getElementById('screen-customize').classList.remove('hidden');
+        if (newState === 'MODE') document.getElementById('screen-mode').classList.remove('hidden');
+        if (newState === 'RESULT') document.getElementById('screen-result').classList.remove('hidden');
+        if (newState === 'RACE') {
+            document.getElementById('game-ui').style.display = 'block';
+            const canShoot = this.playerConfig.ability.type === 'shoot' || this.playerConfig.ability.type === 'god';
+            document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
+        }
+        
+        // Audio Init trigger on any state change from title
+        if (newState !== 'TITLE') Sound.init();
+    }
+
+    startRace(mode) {
+        this.changeState('RACE');
+        this.race = new RaceSession(this, mode, this.playerConfig);
+        Sound.stopBGM();
+        // Countdown sound logic inside RaceSession
+        
+        if (this.loopId) cancelAnimationFrame(this.loopId);
+        this.loop();
+    }
+
+    loop() {
+        if (this.state === 'RACE' && this.race) {
+            this.ctx.clearRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            this.race.update(this.input);
+            this.race.draw(this.ctx);
+        }
+        this.loopId = requestAnimationFrame(() => this.loop());
+    }
+
+    previewLoop() {
+        const pCanvas = document.getElementById('preview-canvas');
+        const pCtx = pCanvas.getContext('2d');
+        const render = () => {
+            if (this.state === 'CUSTOMIZE') {
+                pCtx.clearRect(0, 0, 100, 100);
+                pCtx.fillStyle = "#eee";
+                pCtx.fillRect(0,0,100,100);
+                drawHorse(pCtx, 50, 70, this.playerConfig, Date.now()/100, 0.5);
+            }
+            requestAnimationFrame(render);
+        };
+        render();
+    }
+}
+
+// --- レース管理クラス ---
+class RaceSession {
+    constructor(engine, mode, pConfig) {
+        this.engine = engine;
+        this.mode = mode;
+        this.frame = 0;
+        this.cameraX = 0;
+        this.finished = false;
+        this.isCountingDown = true;
+        this.countDownTimer = 180;
+        this.countDownText = "";
+
+        // ゴール地点
+        this.goalX = CONFIG.BASE_SPEED * 60 * CONFIG.GAME_DURATION_SEC; 
+
+        // プレイヤー生成
+        const startX = 100;
+        this.player = new Horse(true, pConfig, startX, CONFIG.GROUND_Y);
+        
+        // CPU生成
+        this.cpus = [
+            new Horse(false, {color: "#8b4513", headIdx:2, bodyIdx:2, legsIdx:0, ability: ABILITIES["#8b4513"]}, startX, CONFIG.GROUND_Y),
+            new Horse(false, {color: "#ffa500", headIdx:1, bodyIdx:1, legsIdx:1, ability: ABILITIES["#ffa500"]}, startX, CONFIG.GROUND_Y)
+        ];
+        this.cpus[0].x = startX;
+        this.cpus[1].x = startX;
+        
+        if (mode === 'GACHI') {
+            this.cpus[0].baseSpeedMod = 1.04; 
+            this.cpus[1].baseSpeedMod = 1.07; 
+        } else {
+            this.cpus[0].baseSpeedMod = 0.95;
+            this.cpus[1].baseSpeedMod = 1.02;
+        }
+
+        this.entities = [];
+        this.bullets = [];
+        this.generateLevel();
+        this.particles = [];
+        this.bubbles = [];
+    }
+
+    generateLevel() {
+        let x = 800;
+        const density = this.mode === 'GACHI' ? 250 : 300;
+
+        while(x < this.goalX - 800) {
+            x += density + Math.random() * 500;
+            
+            const type = Math.random();
+            if (type < 0.20) {
+                this.entities.push({type: 'obstacle', x: x, y: CONFIG.GROUND_Y - 40, w: 40, h: 40, hit: false});
+            } else if (type < 0.35) {
+                this.entities.push({type: 'pit', x: x, y: CONFIG.GROUND_Y + 10, w: 120, h: 20});
+            } else if (type < 0.55) {
+                this.entities.push({type: 'enemy_static', x: x, y: CONFIG.GROUND_Y - 40, w: 40, h: 40, alive: true});
+            } else if (type < 0.70) {
+                this.entities.push({type: 'enemy_moving', x: x, y: CONFIG.GROUND_Y - 60, w: 60, h: 60, alive: true, vx: -1});
+            } else {
+                const rand = Math.random();
+                let itemType = 'carrot'; 
+                if (rand < 0.2) itemType = 'drink';
+                else if (rand < 0.4) itemType = 'big'; 
+                else if (rand < 0.6) itemType = 'small'; 
+                else if (rand > 0.85) itemType = 'bone';
+                this.entities.push({type: 'item', kind: itemType, x: x, y: CONFIG.GROUND_Y - 80 - Math.random()*80, w: 40, h: 40, taken: false});
+            }
+        }
+    }
+
+    update(input) {
+        if (this.isCountingDown) {
+            this.countDownTimer--;
+            if (this.countDownTimer === 120) Sound.playTone(440, 'square', 0.1);
+            if (this.countDownTimer === 60) Sound.playTone(440, 'square', 0.1);
+            if (this.countDownTimer === 0) {
+                Sound.playTone(880, 'square', 0.4);
+                this.countDownText = "";
+                this.isCountingDown = false;
+                Sound.startRaceBGM();
+            } else if (this.countDownTimer > 120) {
+                this.countDownText = "位置について...";
+            } else if (this.countDownTimer > 60) {
+                this.countDownText = "よーい...";
+            } else {
+                this.countDownText = "ドン！";
+            }
+            return;
+        }
+
+        this.frame++;
+        
+        // プレイヤー更新
+        const effectiveInput = this.finished ? { up: false, dash: false, action: false } : input;
+        const playerSpeedMod = this.finished ? 0.95 : 1.0;
+        
+        const shootReq = this.player.update(effectiveInput, this.entities, playerSpeedMod, this.frame);
+        if (shootReq) {
+            Sound.playShoot();
+            this.bullets.push({
+                x: this.player.x + 50, y: this.player.y + 20,
+                vx: 12, vy: 0,
+                life: 60, w: 20
+            });
+            this.addBubble(this.player.x, this.player.y-40, "ファイア!", "#f44336");
+        }
+
+        this.cameraX = this.player.x - 150;
+        if (this.cameraX < 0) this.cameraX = 0;
+
+        // CPU AI
+        this.cpus.forEach((cpu, i) => {
+            let jump = false;
+            let dash = false;
+            let speedMod = cpu.baseSpeedMod;
+
+            if (this.finished) {
+                speedMod = 0.95;
+            } else {
+                const viewDist = 180;
+                const obstacleAhead = this.entities.some(e => 
+                    (e.type === 'obstacle' || e.type === 'pit' || (e.type.startsWith('enemy') && e.alive)) &&
+                    e.x > cpu.x && e.x < cpu.x + viewDist
+                );
+                if (obstacleAhead && cpu.onGround) jump = true;
+
+                if (cpu.stamina > (this.mode === 'GACHI' ? 10 : 30)) dash = true; 
+                if (cpu.stamina < 5) dash = false;
+
+                if (this.mode === 'HAPPY') {
+                    if (cpu.x > this.goalX - 600) {
+                        dash = false;
+                        if (cpu.x > this.goalX - 300) {
+                            cpu.vx = -2; cpu.stamina = 0;
+                        } else {
+                            cpu.vx = 0; 
+                        }
+                        speedMod = 0.5; 
+                        if (this.frame % 120 === 0) {
+                            const accidents = ["おっと！", "靴紐が...", "あ、UFOだ", "Zzz...", "腹痛が..."];
+                            const msg = accidents[Math.floor(Math.random() * accidents.length)];
+                            this.addBubble(cpu.x, cpu.y - 60, msg, "#ff9");
+                        }
+                    }
+                }
+            }
+            cpu.update({up: jump, dash: dash, action: false}, [], speedMod, this.frame);
+        });
+
+        // 火の玉更新
+        this.bullets.forEach(b => {
+            b.x += b.vx; b.life--;
+            this.entities.forEach(e => {
+                if (e.type.startsWith('enemy') && e.alive) {
+                    if (b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.w > e.y) {
+                        e.alive = false; b.life = 0;
+                        Sound.playHit();
+                        this.addBubble(e.x, e.y - 30, "黒焦げ!", "#000");
+                        for(let i=0; i<10; i++) this.particles.push({x: e.x+e.w/2, y: e.y+e.h/2, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color: '#f00', life: 20, w: 5});
+                    }
+                }
+            });
+        });
+        this.bullets = this.bullets.filter(b => b.life > 0);
+
+        this.entities.forEach(e => {
+            if (e.type === 'enemy_moving' && e.alive) e.x += e.vx;
+        });
+
+        // 衝突判定
+        if (!this.finished) {
+            this.entities.forEach(e => {
+                if (e.x < this.cameraX - 100 || e.x > this.cameraX + CONFIG.CANVAS_WIDTH + 100) return;
+
+                if (checkRectCollide(this.player, e)) {
+                    const isGhost = this.player.config.ability.type === 'ghost' || this.player.config.ability.type === 'god';
+                    
+                    if (e.type === 'pit') {
+                        if (this.player.y > CONFIG.GROUND_Y && !this.player.invincible && this.player.config.ability.type !== 'god') {
+                            this.player.damage();
+                            this.player.vy = -15; 
+                            Sound.playHit();
+                        }
+                    } else if (e.type === 'item' && !e.taken) {
+                        e.taken = true;
+                        this.player.getItem(e.kind);
+                        let msg = "回復!";
+                        if (e.kind === 'drink') msg = "全快!!";
+                        if (e.kind === 'bone') msg = "腐ってる...";
+                        if (e.kind === 'big') msg = "巨大化!";
+                        if (e.kind === 'small') msg = "ミニ化!";
+                        
+                        Sound.playItem(e.kind === 'bone' ? 'bad' : 'good');
+                        this.addBubble(this.player.x, this.player.y - 50, msg, e.kind==='bone'?'#999':'#0f0');
+                    } else {
+                        if (isGhost) return;
+                        const isStomp = (this.player.vy > 0) && (this.player.y + this.player.h * this.player.scale < e.y + e.h * 0.5);
+
+                        if (e.type === 'obstacle' && !e.hit) {
+                            if (this.player.invincible) { e.hit = true; }
+                            else { this.player.damage(); e.hit = true; Sound.playHit(); }
+                        } else if (e.type.startsWith('enemy') && e.alive) {
+                            if (isStomp || this.player.invincible) {
+                                e.alive = false;
+                                this.player.vy = -10; 
+                                this.player.stamina = Math.min(CONFIG.MAX_STAMINA, this.player.stamina + 15);
+                                this.addBubble(this.player.x, this.player.y - 60, "うまい！", "#ffeb3b"); 
+                                Sound.playItem('good');
+                                for(let i=0; i<15; i++) this.particles.push({x: e.x+e.w/2, y: e.y+e.h/2, vx: (Math.random()-0.5)*12, vy: (Math.random()-0.5)*12, color: '#fff', life: 30, w: 6});
+                            } else {
+                                this.player.damage();
+                                Sound.playHit();
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        this.bubbles = this.bubbles.filter(b => b.life > 0);
+        this.bubbles.forEach(b => { b.life--; b.y -= 0.5; });
+
+        this.particles.forEach(p => { 
+            p.x += p.vx; p.y += p.vy; 
+            if(p.isCoin) { p.vy += 0.3; p.rot += p.rotSpeed; }
+            p.life--; 
+        });
+        this.particles = this.particles.filter(p => p.life > 0);
+
+        if (!this.finished && this.player.x >= this.goalX) this.finishRace();
+    }
+
+    addBubble(x, y, text, color) {
+        this.bubbles.push({x, y, text, color, life: 60});
+    }
+
+    finishRace() {
+        this.finished = true;
+        Sound.playFanfare();
+
+        let rank = 1;
+        this.cpus.forEach(c => { if (c.x > this.player.x) rank++; });
+
+        if (rank === 1) {
+            const spawnCoins = () => {
+                if (this.engine.state !== 'RACE') return; 
+                for(let i=0; i<3; i++) {
+                    const type = Math.random();
+                    if(type < 0.7) { 
+                        this.particles.push({
+                            x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
+                            y: -50 - Math.random() * 50, 
+                            vx: (Math.random()-0.5) * 1,
+                            vy: 5 + Math.random() * 5, 
+                            color: '#ffd700', 
+                            life: 300, w: 20, isCoin: true,
+                            rot: Math.random() * Math.PI, rotSpeed: (Math.random()-0.5) * 0.2
+                        });
+                    } else { 
+                        this.particles.push({
+                             x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
+                             y: -50, vx: (Math.random()-0.5)*3, vy: 2 + Math.random()*3,
+                             color: `hsl(${Math.random()*360}, 100%, 50%)`, life: 300, w: 10
+                        });
+                    }
+                }
+                requestAnimationFrame(spawnCoins);
+            };
+            spawnCoins();
+        }
+
+        setTimeout(() => {
+            document.getElementById('result-rank').innerText = `${rank}着！`;
+            if (rank === 1) {
+                document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
+                document.getElementById('result-prize').innerText = "2026万";
+            } else {
+                document.getElementById('result-msg').innerText = "残念...";
+                document.getElementById('result-prize').innerText = "0";
+            }
+            Game.toResult();
+        }, 5000); 
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = "#87CEEB";
+        ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+        
+        ctx.save();
+        ctx.translate(-this.cameraX * 0.5, 0);
+        ctx.fillStyle = "#e0e0e0"; 
+        ctx.fillRect(0, 100, this.goalX + 2000, 250);
+        const crowdStartX = Math.floor((this.cameraX * 0.5) / 20) * 20 - 100;
+        const crowdEndX = crowdStartX + CONFIG.CANVAS_WIDTH + 200;
+        for (let row = 0; row < 6; row++) {
+            const rowY = 120 + row * 30;
+            for (let cx = crowdStartX; cx < crowdEndX; cx += 15) {
+                const seed = (cx * 1.3 + row * 7.1 + Math.floor(cx/1000)); 
+                const hue = Math.abs(Math.sin(seed) * 360);
+                ctx.fillStyle = `hsl(${hue}, 70%, 60%)`;
+                const jump = (Math.sin(this.frame * 0.1 + cx) > 0.8) ? 3 : 0;
+                ctx.fillRect(cx, rowY + 15 - jump, 12, 15);
+                ctx.fillStyle = `hsl(${hue}, 70%, 70%)`;
+                ctx.beginPath(); ctx.arc(cx + 6, rowY + 8 - jump, 5, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(-this.cameraX, 0);
+
+        ctx.fillStyle = "#8d6e63";
+        ctx.fillRect(0, CONFIG.GROUND_Y, this.goalX + 2000, 200);
+        ctx.fillStyle = "#4caf50";
+        ctx.fillRect(0, CONFIG.GROUND_Y, this.goalX + 2000, 15);
+        
+        for(let d=0; d<this.goalX; d+=1000) {
+            ctx.fillStyle = "rgba(255,255,255,0.5)";
+            ctx.fillRect(d, CONFIG.GROUND_Y+15, 10, 50);
+            ctx.fillStyle = "#fff";
+            ctx.font = "16px sans-serif";
+            ctx.fillText((d/10)+"m", d, CONFIG.GROUND_Y+80);
+        }
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(100, CONFIG.GROUND_Y, 10, 200);
+
+        drawGoal(ctx, this.goalX);
+
+        this.entities.forEach(e => {
+            if (e.x < this.cameraX - 100 || e.x > this.cameraX + 900) return;
+
+            if (e.type === 'obstacle' && !e.hit) {
+                ctx.fillStyle = "#d32f2f"; ctx.fillRect(e.x, e.y, e.w, e.h); 
+                ctx.fillStyle = "#fff"; ctx.fillRect(e.x, e.y, e.w, 10); 
+            } else if (e.type === 'pit') {
+                ctx.fillStyle = "#222"; ctx.fillRect(e.x, e.y, e.w, 100);
+            } else if (e.type === 'enemy_static' && e.alive) {
+                ctx.fillStyle = "#8d6e63"; ctx.fillRect(e.x+10, e.y+20, 20, 20);
+                ctx.fillStyle = "#ff5722"; ctx.beginPath(); ctx.arc(e.x+20, e.y+20, 20, Math.PI, 0); ctx.fill();
+                ctx.fillStyle = "#fff"; ctx.fillText("💀", e.x+10, e.y+35);
+            } else if (e.type === 'enemy_moving' && e.alive) {
+                const bx = e.x, by = e.y, bw = e.w, bh = e.h;
+                ctx.fillStyle = "#555";
+                ctx.fillRect(bx+10, by+10, bw-20, bh-10); ctx.fillRect(bx+15, by, 30, 20);
+                ctx.fillRect(bx+10, by-5, 10, 10); ctx.fillRect(bx+40, by-5, 10, 10);
+                ctx.fillRect(bx, by, 10, 30); ctx.fillRect(bx+bw-10, by, 10, 30); 
+                ctx.fillStyle = "#fbc02d";
+                ctx.fillRect(bx, by-5, 3, 5); ctx.fillRect(bx+3, by-5, 3, 5); ctx.fillRect(bx+6, by-5, 3, 5);
+                ctx.fillStyle = "#555"; ctx.fillRect(bx+10, by+bh-5, 15, 10);
+                ctx.fillStyle = "#d32f2f"; ctx.fillRect(bx+23, by+15, 14, 10);
+            } else if (e.type === 'item' && !e.taken) {
+                ctx.font = "40px Arial"; 
+                let icon = "🥕";
+                if(e.kind==='bone') icon="🍖"; if(e.kind==='drink') icon="🥤";
+                if(e.kind==='big') icon="🍄"; if(e.kind==='small') icon="🧁";
+                const floatY = Math.sin(this.frame * 0.1) * 5;
+                ctx.fillText(icon, e.x, e.y + 35 + floatY);
+            }
+        });
+
+        this.bullets.forEach(b => {
+            ctx.fillStyle = "#ff4500";
+            ctx.beginPath(); ctx.arc(b.x, b.y, b.w/2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "#ffff00";
+            ctx.beginPath(); ctx.arc(b.x-2, b.y-2, b.w/4, 0, Math.PI*2); ctx.fill();
+        });
+
+        this.cpus.forEach(c => c.draw(ctx));
+        this.player.draw(ctx);
+
+        this.bubbles.forEach(b => {
+            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            ctx.beginPath(); ctx.roundRect(b.x, b.y, 80, 26, 5); ctx.fill();
+            ctx.fillStyle = "#000";
+            ctx.font = "14px bold sans-serif";
+            ctx.fillText(b.text, b.x + 5, b.y + 18);
+        });
+
+        this.particles.forEach(p => {
+            if (p.isCoin) {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.scale(Math.cos(p.rot), 1); 
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(0, 0, p.w/2, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = "#b8860b"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.restore();
+            } else {
+                ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.w, p.w);
+            }
+        });
+
+        ctx.restore();
+
+        // --- HUD ---
+        if (this.isCountingDown) {
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 80px Verdana";
+            ctx.textAlign = "center";
+            ctx.fillText(this.countDownText, CONFIG.CANVAS_WIDTH/2, CONFIG.CANVAS_HEIGHT/2);
+            ctx.textAlign = "left"; return;
+        }
+
+        let rank = 1;
+        this.cpus.forEach(c => { if(c.x > this.player.x) rank++; });
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 24px Verdana";
+        ctx.fillText(`${rank}位 / 3頭`, 20, 40);
+
+        ctx.fillStyle = "#333";
+        ctx.fillRect(20, 50, 204, 24);
+        const ratio = this.player.stamina / CONFIG.MAX_STAMINA;
+        ctx.fillStyle = ratio > 0.5 ? "#00e676" : (ratio > 0.2 ? "#ffea00" : "#ff1744");
+        ctx.fillRect(22, 52, 200 * ratio, 20);
+        ctx.fillStyle = "#fff";
+        ctx.font = "14px Verdana";
+        ctx.fillText("STAMINA", 25, 67);
+
+        if (this.player.config.ability.type === 'god') {
+            ctx.fillStyle = "gold"; ctx.font = "bold 20px Verdana"; ctx.fillText("★GOD MODE★", 240, 70);
+            ctx.fillStyle = "gold"; ctx.fillRect(22, 52, 200, 20);
+        } else if (this.player.stamina < 10) {
+            ctx.fillStyle = "red"; ctx.font = "bold 20px Verdana"; ctx.fillText("バテ気味... 連打を控えろ！", 240, 70);
+        } else if (this.engine.input.dash) {
+            ctx.fillStyle = "orange"; ctx.font = "bold 20px Verdana"; ctx.fillText("DASH!!!", 240, 70);
+        }
+    }
+}
+
+// --- 馬クラス ---
+class Horse {
+    constructor(isPlayer, config, x, y) {
+        this.isPlayer = isPlayer;
+        this.config = config; 
+        this.x = x;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.w = 50;
+        this.h = 50;
+        this.scale = config.ability.scale || 1.0; 
+        this.onGround = false;
+        this.baseSpeedMod = 1.0; 
+        
+        this.stamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
+        this.maxStamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
+        
+        this.jumpCount = 0;
+        this.maxJumps = config.ability.jumps || 1;
+        if (config.ability.type === 'god') this.maxJumps = 999;
+
+        this.invincible = 0; 
+        this.shootCooldown = 0;
+        this.animationFrame = 0;
+    }
+
+    update(input, entities, speedMod = 1.0, frame) {
+        let targetSpeed = CONFIG.BASE_SPEED;
+        const ab = this.config.ability;
+        const isGod = ab.type === 'god';
+
+        // 攻撃処理
+        let shootReq = false;
+        if (this.shootCooldown > 0) this.shootCooldown--;
+        if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
+            shootReq = true;
+            this.shootCooldown = 30; 
+        }
+
+        // ダッシュ処理
+        if (input.dash && this.stamina > 0) {
+            let mult = CONFIG.DASH_SPEED_MULT;
+            if (isGod) mult *= 2.0; 
+            targetSpeed *= mult;
+            let cost = CONFIG.STAMINA_COST_DASH;
+            if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
+            if (isGod) cost = 0; 
+            this.stamina -= cost;
+            // ダッシュ音は連続しすぎないようにinput側で制御
+        } else {
+            this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
+            if(isGod) this.stamina = this.maxStamina;
+        }
+
+        if (this.stamina <= 0) {
+            this.stamina = 0;
+            targetSpeed *= CONFIG.TIRED_SPEED_MULT;
+        }
+
+        if (ab.speedBonus) targetSpeed *= ab.speedBonus;
+        if (isGod) targetSpeed *= 1.5; 
+
+        if (ab.type === 'accel') {
+            const factor = Math.min(2.0, 0.8 + (frame / 1800)); 
+            targetSpeed *= factor;
+        } else if (ab.type === 'decel') {
+            const factor = Math.max(0.6, 1.5 - (frame / 1800));
+            targetSpeed *= factor;
+        }
+
+        if (ab.type === 'glass' && this.stamina <= 0) targetSpeed *= 1.5; 
+
+        const finalTargetSpeed = targetSpeed * speedMod;
+        this.vx += (finalTargetSpeed - this.vx) * 0.1;
+
+        let gravity = CONFIG.GRAVITY;
+        if ((ab.type === 'fly' || isGod) && input.up && this.vy > 0) gravity = 0.1;
+        this.vy += gravity;
+
+        if (input.up && !this.prevUp) {
+            if (this.onGround || (this.jumpCount < this.maxJumps)) {
+                let power = CONFIG.JUMP_POWER;
+                if (ab.jumpBonus) power *= ab.jumpBonus;
+                if (this.stamina <= 0) power *= 0.7;
+                if (isGod) power *= 1.2; 
+                
+                this.vy = power;
+                this.onGround = false;
+                this.jumpCount++;
+                if (this.isPlayer) Sound.playJump();
+            }
+        }
+        this.prevUp = input.up;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.y + this.h * this.scale > CONFIG.GROUND_Y) {
+            this.y = CONFIG.GROUND_Y - this.h * this.scale;
+            this.vy = 0;
+            this.onGround = true;
+            this.jumpCount = 0;
+        }
+
+        if (this.invincible > 0) this.invincible--;
+        this.animationFrame++;
+        
+        return shootReq;
+    }
+
+    damage() {
+        if (this.config.ability.type === 'god') return; 
+        this.vx = -5;
+        this.stamina = Math.max(0, this.stamina - 20);
+        this.invincible = 60;
+    }
+
+    getItem(kind) {
+        let heal = 0;
+        if (kind === 'carrot') heal = CONFIG.STAMINA_RECOVERY_ITEM;
+        if (kind === 'drink') heal = CONFIG.MAX_STAMINA;
+        
+        if (kind === 'bone') {
+            if (this.config.ability.type === 'god') return; 
+            this.stamina = Math.max(0, this.stamina - 30);
+            this.vx *= 0.1;
+        } else if (kind === 'big') {
+            this.scale = 1.5; setTimeout(() => this.scale = this.config.ability.scale || 1.0, 5000);
+            this.stamina = CONFIG.MAX_STAMINA;
+        } else if (kind === 'small') {
+            this.scale = 0.6; setTimeout(() => this.scale = this.config.ability.scale || 1.0, 5000);
+        } else {
+            this.stamina = Math.min(this.maxStamina, this.stamina + heal);
+            this.vx += 2;
+        }
+    }
+
+    draw(ctx) {
+        if (this.invincible > 0 && Math.floor(this.invincible/4)%2===0) return;
+        if (this.config.ability.type === 'god') {
+            ctx.save();
+            ctx.translate(this.x + 25, this.y + 25);
+            ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + Math.sin(Date.now()/100)*0.2})`;
+            ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+        }
+        drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0);
+    }
+}
+
+function drawHorse(ctx, x, y, config, frame, scale, isTired) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    
+    let bounce = Math.sin(frame * 0.5) * 5;
+    if (isTired) bounce *= 0.2;
+    ctx.translate(0, bounce);
+
+    const c = config.color;
+
+    ctx.fillStyle = "#000"; 
+    let legSpeed = isTired ? 0.2 : 0.5;
+    if (config.ability.type === 'god') legSpeed = 1.0;
+    const legOffset = Math.sin(frame * legSpeed) * 10;
+    
+    drawPart(ctx, config.legsIdx, -10 + legOffset, 30, c, 10, 20);
+    drawPart(ctx, config.legsIdx, 30 - legOffset, 30, c, 10, 20);
+
+    ctx.fillStyle = c;
+    drawPart(ctx, config.bodyIdx, 0, 10, c, 50, 30);
+
+    ctx.save();
+    if (isTired) ctx.rotate(Math.PI / 6);
+    drawPart(ctx, config.headIdx, 30, -10, c, 25, 25);
+    
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(45, 0, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#000";
+    if (isTired) {
+        ctx.font = "10px sans-serif"; ctx.fillText("×", 43, 4);
+    } else {
+        ctx.beginPath(); ctx.arc(47, 0, 2, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    if (isTired) {
+        ctx.fillStyle = "#00f";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("💦", 10, 0 - (frame%20));
+    }
+
+    ctx.fillStyle = "brown";
+    ctx.fillRect(15, 10, 20, 15);
+
+    ctx.restore();
+}
+
+function drawPart(ctx, typeIdx, x, y, color, w, h) {
+    if (color === '#gold') ctx.fillStyle = `hsl(50, 100%, ${50 + Math.sin(Date.now()/200)*20}%)`;
+    else ctx.fillStyle = color;
+    
+    if (typeIdx === 0) { ctx.fillRect(x, y, w, h); }
+    else if (typeIdx === 1) { ctx.beginPath(); ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI*2); ctx.fill(); }
+    else if (typeIdx === 2) { ctx.beginPath(); ctx.moveTo(x, y+h); ctx.lineTo(x+w/2, y); ctx.lineTo(x+w, y+h); ctx.fill(); }
+    else if (typeIdx === 3) { ctx.fillRect(x + w*0.25, y, w*0.5, h); }
+    else { ctx.fillRect(x, y, w, h); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fillRect(x+2, y+2, w-4, h-4); }
+}
+
+function drawGoal(ctx, x) {
+    ctx.fillStyle = "#ddd";
+    ctx.fillRect(x, CONFIG.GROUND_Y - 200, 20, 200);
+    ctx.fillRect(x + 200, CONFIG.GROUND_Y - 200, 20, 200);
+    ctx.fillStyle = "#d32f2f";
+    ctx.fillRect(x, CONFIG.GROUND_Y - 200, 220, 50);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 30px Arial";
+    ctx.fillText("2026", x + 70, CONFIG.GROUND_Y - 165);
+    const size = 20;
+    for(let i=0; i<10; i++) {
+        for(let j=0; j<8; j++) {
+            if ((i+j)%2===0) ctx.fillStyle = "#000"; else ctx.fillStyle = "#fff";
+            ctx.fillRect(x + 20 + i*size, CONFIG.GROUND_Y - 150 + j*size, size, size);
+        }
+    }
+}
+
+function checkRectCollide(r1, r2) {
+    const hx = r1.x + 10;
+    const hy = r1.y + 10;
+    const hw = r1.w * r1.scale - 20;
+    const hh = r1.h * r1.scale - 10;
+    return (hx < r2.x + r2.w && hx + hw > r2.x && hy < r2.y + r2.h && hy + hh > r2.y);
+}
+
+// --- グローバル管理 ---
+const Game = new GameEngine();
+const Customizer = {
+    changePart: (part, dir) => {
+        let idx = Game.playerConfig[part + "Idx"];
+        idx += dir;
+        if (idx < 0) idx = 4; if (idx > 4) idx = 0;
+        Game.playerConfig[part + "Idx"] = idx;
+        document.getElementById(`label-${part}`).innerText = idx + 1;
+    },
+    setColor: (color, isSecret = false) => {
+        if (isSecret) {
+            Game.playerConfig.color = '#gold'; 
+            Game.playerConfig.ability = ABILITIES["SECRET"];
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById(`btn-secret`).classList.add('selected');
+        } else {
+            Game.playerConfig.color = color;
+            Game.playerConfig.ability = ABILITIES[color] || {type:'normal', name:'ノーマル'};
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById(`btn-${color}`).classList.add('selected');
+        }
+        
+        let desc = Game.playerConfig.ability.name;
+        if (Game.playerConfig.ability.desc) {
+             desc += `<br><span style="font-size:0.8em; color:#555;">${Game.playerConfig.ability.desc}</span>`;
+        }
+        document.getElementById('ability-desc').innerHTML = desc;
+    }
+};
+
+window.onload = () => {
+    // カラーパレット生成
+    const palette = document.getElementById('color-palette');
+    PALETTE_COLORS.forEach(c => {
+        const btn = document.createElement('div');
+        btn.className = 'color-btn';
+        btn.id = `btn-${c}`;
+        btn.style.backgroundColor = c;
+        btn.onclick = () => Customizer.setColor(c);
+        palette.appendChild(btn);
+    });
+    const secretBtn = document.createElement('div');
+    secretBtn.className = 'color-btn secret';
+    secretBtn.id = 'btn-secret';
+    secretBtn.onclick = () => Customizer.setColor(null, true);
+    palette.appendChild(secretBtn);
+    
+    Customizer.setColor(PALETTE_COLORS[0]);
+    
+    window.Game = Game;
+    window.Customizer = Customizer;
+    Game.toCustomize = () => Game.changeState('CUSTOMIZE');
+    Game.toModeSelect = () => Game.changeState('MODE');
+    Game.startGame = (mode) => Game.startRace(mode);
+    Game.toTitle = () => { Game.changeState('TITLE'); Game.race = null; };
+    Game.toResult = () => Game.changeState('RESULT');
+    Game.showHowTo = () => document.getElementById('screen-howto').classList.remove('hidden');
+    Game.hideHowTo = () => document.getElementById('screen-howto').classList.add('hidden');
+};
+
+</script>
+</body>
+</html>
