@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (v4)</title>
+    <title>2026 HAPPY HORSE RACE (v5 Bonus Video)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -70,6 +70,33 @@
             animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
+        /* ★★★ 追加: 動画画面用のスタイル ★★★ */
+        #screen-bonus-video {
+            background-color: #000; /* 背景を黒に */
+            z-index: 20; /* 最前面に */
+        }
+        #screen-bonus-video .ui-content {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #fff;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        #bonus-video {
+            width: 80%;
+            max-height: 70%;
+            border: 2px solid gold;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            background: #000;
+            margin-bottom: 20px;
+        }
+        /* ★★★★★★★★★★★★★★★★★★★★★★★★★ */
+
         @keyframes popIn {
             from { transform: scale(0.8); opacity: 0; }
             to { transform: scale(1); opacity: 1; }
@@ -100,6 +127,21 @@
         }
         button.secondary { background: #4caf50; border-bottom-color: #1b5e20; }
         button.danger { background: #f44336; border-bottom-color: #b71c1c; }
+
+        /* ★★★ 追加: 特別なボタン（動画再生用）のスタイル ★★★ */
+        button.golden { 
+            background: linear-gradient(to bottom, #ffd700, #ffb300);
+            border-bottom-color: #b8860b;
+            color: #000;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        /* ★★★★★★★★★★★★★★★★★★★★★★★★★ */
 
         /* カスタマイズ画面用 */
         .parts-selector {
@@ -394,15 +436,30 @@
             <p style="font-size: 1.5rem; color: gold; text-shadow: 1px 1px 0 #000;">
                 賞金: <span id="result-prize">2026万</span>円
             </p>
-            <button onclick="Game.toTitle()">もう一度遊ぶ</button>
+            <!-- ★★★ 変更: ID付与（JSで制御するため） ★★★ -->
+            <button id="result-btn" onclick="Game.toTitle()">もう一度遊ぶ</button>
         </div>
     </div>
+
+    <!-- ★★★ 追加: ボーナス動画画面 ★★★ -->
+    <div id="screen-bonus-video" class="ui-layer hidden">
+        <div class="ui-content">
+            <h2 style="color:gold;">CONGRATULATIONS!!</h2>
+            <!-- ▼ここに再生したいmp4ファイルのパスを指定してください▼ -->
+            <video id="bonus-video" src="bonus.mp4" controls playsinline></video>
+            <!-- ▲▲▲ -->
+            <br>
+            <button onclick="Game.toTitle()">タイトルへ戻る</button>
+        </div>
+    </div>
+    <!-- ★★★★★★★★★★★★★★★★★★★★★★★★★ -->
+
 </div>
 
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * v4 Update: Preview Fix & Remove Prize Info from Mode Screen
+ * v5 Bonus Video Update (Integrated with v4 settings)
  */
 
 // --- 設定・定数 ---
@@ -445,7 +502,7 @@ window.addEventListener('resize', resizeGame);
 window.addEventListener('load', resizeGame);
 
 
-// --- 色と能力の定義 ---
+// --- 色と能力の定義 (ユーザー提示コードを維持) ---
 const ABILITIES = {
     "#ffff00": { type: "stamina", name: "無限の体力", staminaSave: 0.1, desc: "スタミナ消費が激減" },
     "#ffd700": { type: "stamina", name: "ゴールデンラング", staminaSave: 0.4, desc: "スタミナ消費がかなり少ない" },
@@ -550,6 +607,7 @@ class Synthesizer {
     }
 
     playDash() {
+        if (!this.ctx || this.isMuted) return; // playDash内にもミュートチェックを追加
         this.playTone(100, 'sawtooth', 0.1, 0.05);
     }
 
@@ -676,6 +734,10 @@ class GameEngine {
             headIdx: 0, bodyIdx: 0, legsIdx: 0,
             color: "#800000", ability: ABILITIES["#800000"]
         };
+        
+        // ★★★ 追加: 結果保存用変数 ★★★
+        this.currentMode = '';
+        this.lastRank = 0;
 
         this.setupInput();
         this.previewLoop();
@@ -725,11 +787,40 @@ class GameEngine {
         if (newState === 'TITLE') document.getElementById('screen-title').classList.remove('hidden');
         if (newState === 'CUSTOMIZE') document.getElementById('screen-customize').classList.remove('hidden');
         if (newState === 'MODE') document.getElementById('screen-mode').classList.remove('hidden');
-        if (newState === 'RESULT') document.getElementById('screen-result').classList.remove('hidden');
+        if (newState === 'RESULT') {
+            document.getElementById('screen-result').classList.remove('hidden');
+            
+            // ★★★ 追加: リザルト画面のボタン分岐処理 ★★★
+            const btn = document.getElementById('result-btn');
+            if (this.currentMode === 'GACHI' && this.lastRank === 1) {
+                // ガチモード1着
+                btn.innerHTML = "👑 ボーナス動画を見る 👑";
+                btn.classList.add("golden");
+                btn.onclick = () => this.showBonusVideo();
+            } else {
+                // 通常
+                btn.innerText = "もう一度遊ぶ";
+                btn.classList.remove("golden");
+                btn.onclick = () => this.toTitle();
+            }
+        }
         if (newState === 'RACE') {
             document.getElementById('game-ui').style.display = 'block';
             const canShoot = this.playerConfig.ability.type === 'shoot' || this.playerConfig.ability.type === 'god';
             document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
+        }
+        
+        // ★★★ 追加: 動画画面表示処理 ★★★
+        if (newState === 'BONUS_VIDEO') {
+            document.getElementById('screen-bonus-video').classList.remove('hidden');
+            const video = document.getElementById('bonus-video');
+            if(video) {
+                video.currentTime = 0;
+                video.play().catch(e => console.log("Video play failed:", e));
+            }
+        } else {
+            const video = document.getElementById('bonus-video');
+            if(video) video.pause();
         }
         
         Sound.init();
@@ -737,10 +828,16 @@ class GameEngine {
 
     startRace(mode) {
         this.changeState('RACE');
+        this.currentMode = mode; // ★★★ 追加: モード保存
         this.race = new RaceSession(this, mode, this.playerConfig);
         Sound.stopBGM();
         if (this.loopId) cancelAnimationFrame(this.loopId);
         this.loop();
+    }
+    
+    // ★★★ 追加: 動画画面への遷移 ★★★
+    showBonusVideo() {
+        this.changeState('BONUS_VIDEO');
     }
 
     loop() {
@@ -757,7 +854,7 @@ class GameEngine {
         const pCtx = pCanvas.getContext('2d');
         const render = () => {
             if (this.state === 'CUSTOMIZE') {
-                // 【修正】プレビュー描画調整
+                // 【修正】プレビュー描画調整 (ユーザー提示コードを維持)
                 // 300x200 のCanvas
                 pCtx.clearRect(0, 0, 300, 200);
                 pCtx.fillStyle = "#fff";
@@ -914,7 +1011,7 @@ class RaceSession {
                         }
                         speedMod = 0.5; 
                         if (this.frame % 120 === 0) {
-                            const accidents = [ "トイレ行きたい", "あ、UFOだ", "Zzz...", "馬刺し食べて〜"];
+                            const accidents = ["おっと！", "靴紐が...", "あ、UFOだ", "Zzz...", "腹痛が..."];
                             const msg = accidents[Math.floor(Math.random() * accidents.length)];
                             this.addBubble(cpu.x, cpu.y - 60, msg, "#ff9");
                         }
@@ -1014,6 +1111,9 @@ class RaceSession {
 
         let rank = 1;
         this.cpus.forEach(c => { if (c.x > this.player.x) rank++; });
+        
+        // ★★★ 追加: 結果保存 ★★★
+        this.engine.lastRank = rank;
 
         if (rank === 1) {
             const spawnCoins = () => {
@@ -1048,7 +1148,7 @@ class RaceSession {
             if (rank === 1) {
                 document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
                 
-                // 【修正】賞金の変更（隠し要素的に残す）
+                // 賞金の変更
                 if (this.mode === 'GACHI') {
                     document.getElementById('result-prize').innerText = "2026億";
                 } else {
@@ -1241,6 +1341,7 @@ class Horse {
         const ab = this.config.ability;
         const isGod = ab.type === 'god';
 
+        // 攻撃処理
         let shootReq = false;
         if (this.shootCooldown > 0) this.shootCooldown--;
         if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
@@ -1248,6 +1349,7 @@ class Horse {
             this.shootCooldown = 30; 
         }
 
+        // ダッシュ処理
         if (input.dash && this.stamina > 0) {
             let mult = CONFIG.DASH_SPEED_MULT;
             if (isGod) mult *= 2.0; 
@@ -1256,6 +1358,7 @@ class Horse {
             if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
             if (isGod) cost = 0; 
             this.stamina -= cost;
+            // ダッシュ音は連続しすぎないようにinput側で制御
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
             if(isGod) this.stamina = this.maxStamina;
