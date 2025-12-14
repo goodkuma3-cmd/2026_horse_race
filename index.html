@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (Fixed)</title>
+    <title>2026 HAPPY HORSE RACE (v8 Final)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -453,7 +453,7 @@
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * v7: Custom Image Support with Fallback
+ * v8 Final
  */
 
 // --- 設定・定数 ---
@@ -471,11 +471,10 @@ const CONFIG = {
     STAMINA_RECOVERY_ITEM: 40,
     GAME_DURATION_SEC: 30, 
     GROUND_Y: 350,
-    // ★★★ 画像のスケール調整: 842px -> 約60px にするための倍率
     BASE_IMAGE_SCALE: 0.15 
 };
 
-// ★★★ 画像ファイル定義 ★★★
+// 画像ファイル定義
 const IMAGE_FILES = {
     head: ['head_01.png', 'head_02.png', 'head_03.png', 'head_04.png', 'head_05.png'],
     body: ['body_01.png', 'body_02.png', 'body_03.png', 'body_04.png', 'body_05.png'],
@@ -542,7 +541,6 @@ const ABILITIES = {
 const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
 
 // --- 画像アセット管理 ---
-// ★★★ 画像の読み込みと保持 ★★★
 const ASSETS = {
     head: [], body: [], legs: []
 };
@@ -552,14 +550,13 @@ function loadImages() {
         files.forEach(filename => {
             const img = new Image();
             img.src = filename;
-            // 読み込み完了かどうかは描画時に img.complete で判定します
             ASSETS[part].push(img);
         });
     });
 }
 loadImages();
 
-// 色合成用オフスクリーンキャンバス (サイズは画像の最大サイズに合わせる)
+// 色合成用オフスクリーンキャンバス
 const bufferCanvas = document.createElement('canvas');
 bufferCanvas.width = 842;
 bufferCanvas.height = 595;
@@ -747,7 +744,7 @@ function enableAudioOnFirstTouch() {
 window.addEventListener('load', enableAudioOnFirstTouch);
 
 
-// --- 馬クラス (ここへ移動: 参照エラー防止のため) ---
+// --- 馬クラス ---
 class Horse {
     constructor(isPlayer, config, x, y) {
         this.isPlayer = isPlayer;
@@ -897,7 +894,8 @@ class Horse {
         }
         
         // ★ ハイブリッド描画呼び出し
-        drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0);
+        // プレイヤーの場合だけ画像チェック、敵は常に図形モードにするため isPlayer を渡す
+        drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0, this.isPlayer);
     }
 }
 
@@ -1056,8 +1054,8 @@ class GameEngine {
                 pCtx.stroke();
 
                 // 馬を少し縮小(1.7倍)して、位置を少し上に(130)調整して全体が入るようにする
-                // ここでは2.5倍にして描画（図形時）
-                drawHorse(pCtx, 135, 100, this.playerConfig, Date.now()/100, 2.5);
+                // ここでは2.5倍にして描画（図形時）、isPlayer=true
+                drawHorse(pCtx, 135, 100, this.playerConfig, Date.now()/100, 2.5, false, true);
             }
             requestAnimationFrame(render);
         };
@@ -1502,7 +1500,7 @@ class RaceSession {
 
 // ★★★ 描画ロジックの修正: ハイブリッド描画システム ★★★
 // 画像があれば画像を表示し、なければ図形を描画する安全設計
-function drawHorse(ctx, x, y, config, frame, scale, isTired) {
+function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) { // isPlayerを追加
     ctx.save();
     ctx.translate(x, y);
     
@@ -1513,7 +1511,8 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
 
     // ★ 画像が「全て」正常にロード完了しているかチェック
     const isLoaded = (img) => img && img.complete && img.naturalHeight !== 0;
-    const hasImage = isLoaded(headImg) && isLoaded(bodyImg) && isLoaded(legsImg);
+    // ★★★ 修正: プレイヤーかつ全画像がロードされている場合のみ画像モードにする
+    const hasImage = isPlayer && isLoaded(headImg) && isLoaded(bodyImg) && isLoaded(legsImg);
 
     let currentScale = scale;
     if (hasImage) {
