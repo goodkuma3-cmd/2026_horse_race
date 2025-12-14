@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (Custom Image Ver)</title>
+    <title>2026 HAPPY HORSE RACE (Hybrid Ver)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -459,7 +459,7 @@
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * v6: Custom Image Parts Support
+ * v7: Custom Image Parts Support (Hybrid Fallback)
  */
 
 // --- 設定・定数 ---
@@ -477,9 +477,14 @@ const CONFIG = {
     STAMINA_RECOVERY_ITEM: 40,
     GAME_DURATION_SEC: 30, 
     GROUND_Y: 350,
-    // ★★★ 追加: 842x595の画像をゲーム画面サイズに合わせるための基本スケール
-    // 842px -> 120px 程度にしたい場合、0.14倍くらい
     BASE_IMAGE_SCALE: 0.14
+};
+
+// ★★★ ここで画像のファイル名を設定できます ★★★
+const IMAGE_FILES = {
+    head: ['head_01.png', 'head_02.png', 'head_03.png', 'head_04.png', 'head_05.png'],
+    body: ['body_01.png', 'body_02.png', 'body_03.png', 'body_04.png', 'body_05.png'],
+    legs: ['legs_01.png', 'legs_02.png', 'legs_03.png', 'legs_04.png', 'legs_05.png']
 };
 
 // --- レスポンシブ対応ロジック ---
@@ -542,27 +547,22 @@ const ABILITIES = {
 const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
 
 // --- 画像アセット管理 ---
-// ★★★ 画像の読み込みと管理を行うクラスを追加 ★★★
 const ASSETS = {
     head: [],
     body: [],
     legs: []
 };
 
-// 画像ファイル名：head_01.png, head_02.png...
-// ここでは5種類ずつあると仮定して読み込むが、ユーザーの手元にファイルがないとエラー（白表示）になる
+// 画像の読み込み
 function loadImages() {
-    const parts = ['head', 'body', 'legs'];
-    const count = 5; // パーツのバリエーション数
-    
-    parts.forEach(part => {
-        for(let i = 1; i <= count; i++) {
+    ['head', 'body', 'legs'].forEach(part => {
+        const files = IMAGE_FILES[part];
+        files.forEach(filename => {
             const img = new Image();
-            // ファイル名は head_01.png のような形式
-            const num = i.toString().padStart(2, '0');
-            img.src = `${part}_${num}.png`;
+            img.src = filename;
+            // 読み込み完了時にフラグを立てる等の処理は省略（描画時にcompleteプロパティで判定）
             ASSETS[part].push(img);
-        }
+        });
     });
 }
 loadImages();
@@ -756,7 +756,6 @@ window.addEventListener('load', enableAudioOnFirstTouch);
 
 
 // --- 馬クラス ---
-// ★★★ 先に定義してエラー回避 ★★★
 class Horse {
     constructor(isPlayer, config, x, y) {
         this.isPlayer = isPlayer;
@@ -1503,51 +1502,80 @@ class RaceSession {
     }
 }
 
-// ★★★ 描画ロジックの書き換え (画像を使用) ★★★
+// ★★★ 描画ロジックの書き換え (画像優先・フォールバック付き) ★★★
 function drawHorse(ctx, x, y, config, frame, scale, isTired) {
     ctx.save();
     ctx.translate(x, y);
     
-    // スケール調整: 元画像のサイズが大きいので縮小
-    const baseScale = scale * CONFIG.BASE_IMAGE_SCALE; 
-    ctx.scale(baseScale, baseScale);
+    // スケール調整: 画像がある場合は縮小、ない場合は通常サイズ
+    // ★ ここで判定
+    const headImg = ASSETS.head[config.headIdx];
+    const hasImage = headImg && headImg.complete && headImg.naturalHeight !== 0;
+
+    let currentScale = scale;
+    if (hasImage) {
+        currentScale = scale * CONFIG.BASE_IMAGE_SCALE;
+    }
+    ctx.scale(currentScale, currentScale);
     
-    let bounce = Math.sin(frame * 0.5) * 50; // 跳ねる量を調整
+    let bounce = Math.sin(frame * 0.5) * (hasImage ? 50 : 5); // 跳ねる量を調整
     if (isTired) bounce *= 0.2;
     ctx.translate(0, bounce);
 
     const c = config.color;
 
-    // パーツ描画 (後ろから前へ)
-    // 重ねるだけなので、すべて同じオフセットで描画
-    // 画像がロードされているかチェック
-    const legsImg = ASSETS.legs[config.legsIdx];
-    const bodyImg = ASSETS.body[config.bodyIdx];
-    const headImg = ASSETS.head[config.headIdx];
+    // ★ 画像があれば画像描画、なければ元の図形描画
+    if (hasImage) {
+        const legsImg = ASSETS.legs[config.legsIdx];
+        const bodyImg = ASSETS.body[config.bodyIdx];
 
-    // 足
-    if (legsImg) {
-        drawPartImage(ctx, legsImg, c);
-    }
-
-    // 体
-    if (bodyImg) {
-        drawPartImage(ctx, bodyImg, c);
-    }
-
-    // 頭
-    if (headImg) {
-        ctx.save();
-        if (isTired) ctx.rotate(Math.PI / 6); // 疲れたときは頭を傾ける
-        drawPartImage(ctx, headImg, c);
+        if (legsImg) drawPartImage(ctx, legsImg, c);
+        if (bodyImg) drawPartImage(ctx, bodyImg, c);
+        if (headImg) {
+            ctx.save();
+            if (isTired) ctx.rotate(Math.PI / 6);
+            drawPartImage(ctx, headImg, c);
+            ctx.restore();
+        }
+    } else {
+        // --- フォールバック: 元の図形描画処理 ---
+        ctx.fillStyle = "#000"; 
+        let legSpeed = isTired ? 0.2 : 0.5;
+        if (config.ability.type === 'god') legSpeed = 1.0;
+        const legOffset = Math.sin(frame * legSpeed) * 10;
         
-        // 汗（これは元の描画コードでOK）
+        drawPartShape(ctx, config.legsIdx, -10 + legOffset, 30, c, 10, 20);
+        drawPartShape(ctx, config.legsIdx, 30 - legOffset, 30, c, 10, 20);
+
+        ctx.fillStyle = c;
+        drawPartShape(ctx, config.bodyIdx, 0, 10, c, 50, 30);
+
+        ctx.save();
+        if (isTired) ctx.rotate(Math.PI / 6);
+        drawPartShape(ctx, config.headIdx, 30, -10, c, 25, 25);
+        
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(45, 0, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#000";
         if (isTired) {
-            ctx.fillStyle = "#00f";
-            ctx.font = "100px sans-serif"; // 画像に合わせてフォントサイズも大きく
-            ctx.fillText("💦", 100, 0);
+            ctx.font = "10px sans-serif"; ctx.fillText("×", 43, 4);
+        } else {
+            ctx.beginPath(); ctx.arc(47, 0, 2, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
+        // --- フォールバック終了 ---
+    }
+
+    if (isTired) {
+        ctx.fillStyle = "#00f";
+        // 文字サイズもモードによって変える
+        ctx.font = hasImage ? "100px sans-serif" : "12px sans-serif";
+        ctx.fillText("💦", hasImage ? 100 : 10, 0);
+    }
+
+    if (!hasImage) {
+        ctx.fillStyle = "brown";
+        ctx.fillRect(15, 10, 20, 15);
     }
 
     ctx.restore();
@@ -1571,8 +1599,17 @@ function drawPartImage(ctx, img, color) {
     ctx.drawImage(bufferCanvas, -bufferCanvas.width/2, -bufferCanvas.height/2);
 }
 
-// ★★★ 古い drawPart 関数は不要だが、エラー回避のため空定義または削除 ★★★
-// 今回は drawHorse 内で drawPartImage を直接呼ぶ形に変えたので不要
+// ★★★ 復活: 元の図形描画関数 (名前を変更: drawPart -> drawPartShape) ★★★
+function drawPartShape(ctx, typeIdx, x, y, color, w, h) {
+    if (color === '#gold') ctx.fillStyle = `hsl(50, 100%, ${50 + Math.sin(Date.now()/200)*20}%)`;
+    else ctx.fillStyle = color;
+    
+    if (typeIdx === 0) { ctx.fillRect(x, y, w, h); }
+    else if (typeIdx === 1) { ctx.beginPath(); ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI*2); ctx.fill(); }
+    else if (typeIdx === 2) { ctx.beginPath(); ctx.moveTo(x, y+h); ctx.lineTo(x+w/2, y); ctx.lineTo(x+w, y+h); ctx.fill(); }
+    else if (typeIdx === 3) { ctx.fillRect(x + w*0.25, y, w*0.5, h); }
+    else { ctx.fillRect(x, y, w, h); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fillRect(x+2, y+2, w-4, h-4); }
+}
 
 function drawGoal(ctx, x) {
     ctx.fillStyle = "#ddd";
