@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (v5 Bonus Video)</title>
+    <title>2026 HAPPY HORSE RACE (Custom Image Ver)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -459,7 +459,7 @@
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * v5 Bonus Video Update (Integrated with v4 settings)
+ * v6: Custom Image Parts Support
  */
 
 // --- 設定・定数 ---
@@ -476,7 +476,10 @@ const CONFIG = {
     STAMINA_RECOVERY_BASE: 0.3,
     STAMINA_RECOVERY_ITEM: 40,
     GAME_DURATION_SEC: 30, 
-    GROUND_Y: 350
+    GROUND_Y: 350,
+    // ★★★ 追加: 842x595の画像をゲーム画面サイズに合わせるための基本スケール
+    // 842px -> 120px 程度にしたい場合、0.14倍くらい
+    BASE_IMAGE_SCALE: 0.14
 };
 
 // --- レスポンシブ対応ロジック ---
@@ -502,7 +505,7 @@ window.addEventListener('resize', resizeGame);
 window.addEventListener('load', resizeGame);
 
 
-// --- 色と能力の定義 (ユーザー提示コードを維持) ---
+// --- 色と能力の定義 ---
 const ABILITIES = {
     "#ffff00": { type: "stamina", name: "無限の体力", staminaSave: 0.1, desc: "スタミナ消費が激減" },
     "#ffd700": { type: "stamina", name: "ゴールデンラング", staminaSave: 0.4, desc: "スタミナ消費がかなり少ない" },
@@ -537,6 +540,39 @@ const ABILITIES = {
     "SECRET": { type: "god", name: "伝説の馬", desc: "全てを兼ね備えた最強の馬" }
 };
 const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
+
+// --- 画像アセット管理 ---
+// ★★★ 画像の読み込みと管理を行うクラスを追加 ★★★
+const ASSETS = {
+    head: [],
+    body: [],
+    legs: []
+};
+
+// 画像ファイル名：head_01.png, head_02.png...
+// ここでは5種類ずつあると仮定して読み込むが、ユーザーの手元にファイルがないとエラー（白表示）になる
+function loadImages() {
+    const parts = ['head', 'body', 'legs'];
+    const count = 5; // パーツのバリエーション数
+    
+    parts.forEach(part => {
+        for(let i = 1; i <= count; i++) {
+            const img = new Image();
+            // ファイル名は head_01.png のような形式
+            const num = i.toString().padStart(2, '0');
+            img.src = `${part}_${num}.png`;
+            ASSETS[part].push(img);
+        }
+    });
+}
+loadImages();
+
+// 色合成用オフスクリーンキャンバス
+const bufferCanvas = document.createElement('canvas');
+bufferCanvas.width = 842;
+bufferCanvas.height = 595;
+const bCtx = bufferCanvas.getContext('2d');
+
 
 // --- 音声生成マネージャー ---
 class Synthesizer {
@@ -719,6 +755,159 @@ function enableAudioOnFirstTouch() {
 window.addEventListener('load', enableAudioOnFirstTouch);
 
 
+// --- 馬クラス ---
+// ★★★ 先に定義してエラー回避 ★★★
+class Horse {
+    constructor(isPlayer, config, x, y) {
+        this.isPlayer = isPlayer;
+        this.config = config; 
+        this.x = x;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.w = 50;
+        this.h = 50;
+        this.scale = config.ability.scale || 1.0; 
+        this.onGround = false;
+        this.baseSpeedMod = 1.0; 
+        
+        this.stamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
+        this.maxStamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
+        
+        this.jumpCount = 0;
+        this.maxJumps = config.ability.jumps || 1;
+        if (config.ability.type === 'god') this.maxJumps = 999;
+
+        this.invincible = 0; 
+        this.shootCooldown = 0;
+        this.animationFrame = 0;
+    }
+
+    update(input, entities, speedMod = 1.0, frame) {
+        let targetSpeed = CONFIG.BASE_SPEED;
+        const ab = this.config.ability;
+        const isGod = ab.type === 'god';
+
+        // 攻撃処理
+        let shootReq = false;
+        if (this.shootCooldown > 0) this.shootCooldown--;
+        if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
+            shootReq = true;
+            this.shootCooldown = 30; 
+        }
+
+        // ダッシュ処理
+        if (input.dash && this.stamina > 0) {
+            let mult = CONFIG.DASH_SPEED_MULT;
+            if (isGod) mult *= 2.0; 
+            targetSpeed *= mult;
+            let cost = CONFIG.STAMINA_COST_DASH;
+            if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
+            if (isGod) cost = 0; 
+            this.stamina -= cost;
+            // ダッシュ音は連続しすぎないようにinput側で制御
+        } else {
+            this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
+            if(isGod) this.stamina = this.maxStamina;
+        }
+
+        if (this.stamina <= 0) {
+            this.stamina = 0;
+            targetSpeed *= CONFIG.TIRED_SPEED_MULT;
+        }
+
+        if (ab.speedBonus) targetSpeed *= ab.speedBonus;
+        if (isGod) targetSpeed *= 1.5; 
+
+        if (ab.type === 'accel') {
+            const factor = Math.min(2.0, 0.8 + (frame / 1800)); 
+            targetSpeed *= factor;
+        } else if (ab.type === 'decel') {
+            const factor = Math.max(0.6, 1.5 - (frame / 1800));
+            targetSpeed *= factor;
+        }
+
+        if (ab.type === 'glass' && this.stamina <= 0) targetSpeed *= 1.5; 
+
+        const finalTargetSpeed = targetSpeed * speedMod;
+        this.vx += (finalTargetSpeed - this.vx) * 0.1;
+
+        let gravity = CONFIG.GRAVITY;
+        if ((ab.type === 'fly' || isGod) && input.up && this.vy > 0) gravity = 0.1;
+        this.vy += gravity;
+
+        if (input.up && !this.prevUp) {
+            if (this.onGround || (this.jumpCount < this.maxJumps)) {
+                let power = CONFIG.JUMP_POWER;
+                if (ab.jumpBonus) power *= ab.jumpBonus;
+                if (this.stamina <= 0) power *= 0.7;
+                if (isGod) power *= 1.2; 
+                
+                this.vy = power;
+                this.onGround = false;
+                this.jumpCount++;
+                if (this.isPlayer) Sound.playJump();
+            }
+        }
+        this.prevUp = input.up;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.y + this.h * this.scale > CONFIG.GROUND_Y) {
+            this.y = CONFIG.GROUND_Y - this.h * this.scale;
+            this.vy = 0;
+            this.onGround = true;
+            this.jumpCount = 0;
+        }
+
+        if (this.invincible > 0) this.invincible--;
+        this.animationFrame++;
+        
+        return shootReq;
+    }
+
+    damage() {
+        if (this.config.ability.type === 'god') return; 
+        this.vx = -5;
+        this.stamina = Math.max(0, this.stamina - 20);
+        this.invincible = 60;
+    }
+
+    getItem(kind) {
+        let heal = 0;
+        if (kind === 'carrot') heal = CONFIG.STAMINA_RECOVERY_ITEM;
+        if (kind === 'drink') heal = CONFIG.MAX_STAMINA;
+        
+        if (kind === 'bone') {
+            if (this.config.ability.type === 'god') return; 
+            this.stamina = Math.max(0, this.stamina - 30);
+            this.vx *= 0.1;
+        } else if (kind === 'big') {
+            this.scale = 1.5; setTimeout(() => this.scale = this.config.ability.scale || 1.0, 5000);
+            this.stamina = CONFIG.MAX_STAMINA;
+        } else if (kind === 'small') {
+            this.scale = 0.6; setTimeout(() => this.scale = this.config.ability.scale || 1.0, 5000);
+        } else {
+            this.stamina = Math.min(this.maxStamina, this.stamina + heal);
+            this.vx += 2;
+        }
+    }
+
+    draw(ctx) {
+        if (this.invincible > 0 && Math.floor(this.invincible/4)%2===0) return;
+        if (this.config.ability.type === 'god') {
+            ctx.save();
+            ctx.translate(this.x + 25, this.y + 25);
+            ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + Math.sin(Date.now()/100)*0.2})`;
+            ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+        }
+        drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0);
+    }
+}
+
+
 // --- ゲームエンジン ---
 class GameEngine {
     constructor() {
@@ -839,6 +1028,11 @@ class GameEngine {
     showBonusVideo() {
         this.changeState('BONUS_VIDEO');
     }
+    
+    toTitle() {
+        this.changeState('TITLE');
+        this.race = null;
+    }
 
     loop() {
         if (this.state === 'RACE' && this.race) {
@@ -854,7 +1048,7 @@ class GameEngine {
         const pCtx = pCanvas.getContext('2d');
         const render = () => {
             if (this.state === 'CUSTOMIZE') {
-                // 【修正】プレビュー描画調整 (ユーザー提示コードを維持)
+                // 【修正】プレビュー描画調整
                 // 300x200 のCanvas
                 pCtx.clearRect(0, 0, 300, 200);
                 pCtx.fillStyle = "#fff";
@@ -1011,7 +1205,7 @@ class RaceSession {
                         }
                         speedMod = 0.5; 
                         if (this.frame % 120 === 0) {
-                            const accidents = ["おっと！", "靴紐が...", "あ、UFOだ", "Zzz...", "腹痛が..."];
+                            const accidents = [ "トイレ行きたい", "あ、UFOだ", "Zzz...", "馬刺し食べて〜"];
                             const msg = accidents[Math.floor(Math.random() * accidents.length)];
                             this.addBubble(cpu.x, cpu.y - 60, msg, "#ff9");
                         }
@@ -1148,7 +1342,7 @@ class RaceSession {
             if (rank === 1) {
                 document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
                 
-                // 賞金の変更
+                // 【修正】賞金の変更（隠し要素的に残す）
                 if (this.mode === 'GACHI') {
                     document.getElementById('result-prize').innerText = "2026億";
                 } else {
@@ -1309,215 +1503,76 @@ class RaceSession {
     }
 }
 
-// --- 馬クラス ---
-class Horse {
-    constructor(isPlayer, config, x, y) {
-        this.isPlayer = isPlayer;
-        this.config = config; 
-        this.x = x;
-        this.y = y;
-        this.vx = 0;
-        this.vy = 0;
-        this.w = 50;
-        this.h = 50;
-        this.scale = config.ability.scale || 1.0; 
-        this.onGround = false;
-        this.baseSpeedMod = 1.0; 
-        
-        this.stamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
-        this.maxStamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
-        
-        this.jumpCount = 0;
-        this.maxJumps = config.ability.jumps || 1;
-        if (config.ability.type === 'god') this.maxJumps = 999;
-
-        this.invincible = 0; 
-        this.shootCooldown = 0;
-        this.animationFrame = 0;
-    }
-
-    update(input, entities, speedMod = 1.0, frame) {
-        let targetSpeed = CONFIG.BASE_SPEED;
-        const ab = this.config.ability;
-        const isGod = ab.type === 'god';
-
-        // 攻撃処理
-        let shootReq = false;
-        if (this.shootCooldown > 0) this.shootCooldown--;
-        if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
-            shootReq = true;
-            this.shootCooldown = 30; 
-        }
-
-        // ダッシュ処理
-        if (input.dash && this.stamina > 0) {
-            let mult = CONFIG.DASH_SPEED_MULT;
-            if (isGod) mult *= 2.0; 
-            targetSpeed *= mult;
-            let cost = CONFIG.STAMINA_COST_DASH;
-            if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
-            if (isGod) cost = 0; 
-            this.stamina -= cost;
-            // ダッシュ音は連続しすぎないようにinput側で制御
-        } else {
-            this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
-            if(isGod) this.stamina = this.maxStamina;
-        }
-
-        if (this.stamina <= 0) {
-            this.stamina = 0;
-            targetSpeed *= CONFIG.TIRED_SPEED_MULT;
-        }
-
-        if (ab.speedBonus) targetSpeed *= ab.speedBonus;
-        if (isGod) targetSpeed *= 1.5; 
-
-        if (ab.type === 'accel') {
-            const factor = Math.min(2.0, 0.8 + (frame / 1800)); 
-            targetSpeed *= factor;
-        } else if (ab.type === 'decel') {
-            const factor = Math.max(0.6, 1.5 - (frame / 1800));
-            targetSpeed *= factor;
-        }
-
-        if (ab.type === 'glass' && this.stamina <= 0) targetSpeed *= 1.5; 
-
-        const finalTargetSpeed = targetSpeed * speedMod;
-        this.vx += (finalTargetSpeed - this.vx) * 0.1;
-
-        let gravity = CONFIG.GRAVITY;
-        if ((ab.type === 'fly' || isGod) && input.up && this.vy > 0) gravity = 0.1;
-        this.vy += gravity;
-
-        if (input.up && !this.prevUp) {
-            if (this.onGround || (this.jumpCount < this.maxJumps)) {
-                let power = CONFIG.JUMP_POWER;
-                if (ab.jumpBonus) power *= ab.jumpBonus;
-                if (this.stamina <= 0) power *= 0.7;
-                if (isGod) power *= 1.2; 
-                
-                this.vy = power;
-                this.onGround = false;
-                this.jumpCount++;
-                if (this.isPlayer) Sound.playJump();
-            }
-        }
-        this.prevUp = input.up;
-
-        this.x += this.vx;
-        this.y += this.vy;
-
-        if (this.y + this.h * this.scale > CONFIG.GROUND_Y) {
-            this.y = CONFIG.GROUND_Y - this.h * this.scale;
-            this.vy = 0;
-            this.onGround = true;
-            this.jumpCount = 0;
-        }
-
-        if (this.invincible > 0) this.invincible--;
-        this.animationFrame++;
-        
-        return shootReq;
-    }
-
-    damage() {
-        if (this.config.ability.type === 'god') return; 
-        this.vx = -5;
-        this.stamina = Math.max(0, this.stamina - 20);
-        this.invincible = 60;
-    }
-
-    getItem(kind) {
-        let heal = 0;
-        if (kind === 'carrot') heal = CONFIG.STAMINA_RECOVERY_ITEM;
-        if (kind === 'drink') heal = CONFIG.MAX_STAMINA;
-        
-        if (kind === 'bone') {
-            if (this.config.ability.type === 'god') return; 
-            this.stamina = Math.max(0, this.stamina - 30);
-            this.vx *= 0.1;
-        } else if (kind === 'big') {
-            this.scale = 1.5; setTimeout(() => this.scale = this.config.ability.scale || 1.0, 5000);
-            this.stamina = CONFIG.MAX_STAMINA;
-        } else if (kind === 'small') {
-            this.scale = 0.6; setTimeout(() => this.scale = this.config.ability.scale || 1.0, 5000);
-        } else {
-            this.stamina = Math.min(this.maxStamina, this.stamina + heal);
-            this.vx += 2;
-        }
-    }
-
-    draw(ctx) {
-        if (this.invincible > 0 && Math.floor(this.invincible/4)%2===0) return;
-        if (this.config.ability.type === 'god') {
-            ctx.save();
-            ctx.translate(this.x + 25, this.y + 25);
-            ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + Math.sin(Date.now()/100)*0.2})`;
-            ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
-            ctx.restore();
-        }
-        drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0);
-    }
-}
-
+// ★★★ 描画ロジックの書き換え (画像を使用) ★★★
 function drawHorse(ctx, x, y, config, frame, scale, isTired) {
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(scale, scale);
     
-    let bounce = Math.sin(frame * 0.5) * 5;
+    // スケール調整: 元画像のサイズが大きいので縮小
+    const baseScale = scale * CONFIG.BASE_IMAGE_SCALE; 
+    ctx.scale(baseScale, baseScale);
+    
+    let bounce = Math.sin(frame * 0.5) * 50; // 跳ねる量を調整
     if (isTired) bounce *= 0.2;
     ctx.translate(0, bounce);
 
     const c = config.color;
 
-    ctx.fillStyle = "#000"; 
-    let legSpeed = isTired ? 0.2 : 0.5;
-    if (config.ability.type === 'god') legSpeed = 1.0;
-    const legOffset = Math.sin(frame * legSpeed) * 10;
-    
-    drawPart(ctx, config.legsIdx, -10 + legOffset, 30, c, 10, 20);
-    drawPart(ctx, config.legsIdx, 30 - legOffset, 30, c, 10, 20);
+    // パーツ描画 (後ろから前へ)
+    // 重ねるだけなので、すべて同じオフセットで描画
+    // 画像がロードされているかチェック
+    const legsImg = ASSETS.legs[config.legsIdx];
+    const bodyImg = ASSETS.body[config.bodyIdx];
+    const headImg = ASSETS.head[config.headIdx];
 
-    ctx.fillStyle = c;
-    drawPart(ctx, config.bodyIdx, 0, 10, c, 50, 30);
-
-    ctx.save();
-    if (isTired) ctx.rotate(Math.PI / 6);
-    drawPart(ctx, config.headIdx, 30, -10, c, 25, 25);
-    
-    ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(45, 0, 5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#000";
-    if (isTired) {
-        ctx.font = "10px sans-serif"; ctx.fillText("×", 43, 4);
-    } else {
-        ctx.beginPath(); ctx.arc(47, 0, 2, 0, Math.PI*2); ctx.fill();
-    }
-    ctx.restore();
-
-    if (isTired) {
-        ctx.fillStyle = "#00f";
-        ctx.font = "12px sans-serif";
-        ctx.fillText("💦", 10, 0 - (frame%20));
+    // 足
+    if (legsImg) {
+        drawPartImage(ctx, legsImg, c);
     }
 
-    ctx.fillStyle = "brown";
-    ctx.fillRect(15, 10, 20, 15);
+    // 体
+    if (bodyImg) {
+        drawPartImage(ctx, bodyImg, c);
+    }
+
+    // 頭
+    if (headImg) {
+        ctx.save();
+        if (isTired) ctx.rotate(Math.PI / 6); // 疲れたときは頭を傾ける
+        drawPartImage(ctx, headImg, c);
+        
+        // 汗（これは元の描画コードでOK）
+        if (isTired) {
+            ctx.fillStyle = "#00f";
+            ctx.font = "100px sans-serif"; // 画像に合わせてフォントサイズも大きく
+            ctx.fillText("💦", 100, 0);
+        }
+        ctx.restore();
+    }
 
     ctx.restore();
 }
 
-function drawPart(ctx, typeIdx, x, y, color, w, h) {
-    if (color === '#gold') ctx.fillStyle = `hsl(50, 100%, ${50 + Math.sin(Date.now()/200)*20}%)`;
-    else ctx.fillStyle = color;
+// ★★★ 画像の色変え描画関数 ★★★
+function drawPartImage(ctx, img, color) {
+    // 1. バッファをクリア
+    bCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
     
-    if (typeIdx === 0) { ctx.fillRect(x, y, w, h); }
-    else if (typeIdx === 1) { ctx.beginPath(); ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI*2); ctx.fill(); }
-    else if (typeIdx === 2) { ctx.beginPath(); ctx.moveTo(x, y+h); ctx.lineTo(x+w/2, y); ctx.lineTo(x+w, y+h); ctx.fill(); }
-    else if (typeIdx === 3) { ctx.fillRect(x + w*0.25, y, w*0.5, h); }
-    else { ctx.fillRect(x, y, w, h); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fillRect(x+2, y+2, w-4, h-4); }
+    // 2. 画像をバッファに描画
+    bCtx.drawImage(img, 0, 0);
+    
+    // 3. 色を source-in で合成
+    bCtx.globalCompositeOperation = 'source-in';
+    bCtx.fillStyle = color;
+    bCtx.fillRect(0, 0, bufferCanvas.width, bufferCanvas.height);
+    bCtx.globalCompositeOperation = 'source-over'; // 戻す
+
+    // 4. メインキャンバスに描画 (中心合わせ)
+    ctx.drawImage(bufferCanvas, -bufferCanvas.width/2, -bufferCanvas.height/2);
 }
+
+// ★★★ 古い drawPart 関数は不要だが、エラー回避のため空定義または削除 ★★★
+// 今回は drawHorse 内で drawPartImage を直接呼ぶ形に変えたので不要
 
 function drawGoal(ctx, x) {
     ctx.fillStyle = "#ddd";
