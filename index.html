@@ -477,10 +477,11 @@ const CONFIG = {
     STAMINA_RECOVERY_ITEM: 40,
     GAME_DURATION_SEC: 30, 
     GROUND_Y: 350,
+    // ★★★ 842x595の画像をゲーム画面サイズに合わせるための基本スケール
     BASE_IMAGE_SCALE: 0.14
 };
 
-// ★★★ ここで画像のファイル名を設定できます ★★★
+// ★★★ 画像のファイル名リスト ★★★
 const IMAGE_FILES = {
     head: ['head_01.png', 'head_02.png', 'head_03.png', 'head_04.png', 'head_05.png'],
     body: ['body_01.png', 'body_02.png', 'body_03.png', 'body_04.png', 'body_05.png'],
@@ -553,14 +554,13 @@ const ASSETS = {
     legs: []
 };
 
-// 画像の読み込み
+// 画像の読み込み処理
 function loadImages() {
     ['head', 'body', 'legs'].forEach(part => {
         const files = IMAGE_FILES[part];
         files.forEach(filename => {
             const img = new Image();
             img.src = filename;
-            // 読み込み完了時にフラグを立てる等の処理は省略（描画時にcompleteプロパティで判定）
             ASSETS[part].push(img);
         });
     });
@@ -643,7 +643,7 @@ class Synthesizer {
     }
 
     playDash() {
-        if (!this.ctx || this.isMuted) return; // playDash内にもミュートチェックを追加
+        if (!this.ctx || this.isMuted) return; 
         this.playTone(100, 'sawtooth', 0.1, 0.05);
     }
 
@@ -755,7 +755,7 @@ function enableAudioOnFirstTouch() {
 window.addEventListener('load', enableAudioOnFirstTouch);
 
 
-// --- 馬クラス ---
+// --- 馬クラス (先に定義) ---
 class Horse {
     constructor(isPlayer, config, x, y) {
         this.isPlayer = isPlayer;
@@ -1294,67 +1294,6 @@ class RaceSession {
         if (!this.finished && this.player.x >= this.goalX) this.finishRace();
     }
 
-    addBubble(x, y, text, color) {
-        this.bubbles.push({x, y, text, color, life: 60});
-    }
-
-    finishRace() {
-        this.finished = true;
-        Sound.playFanfare();
-
-        let rank = 1;
-        this.cpus.forEach(c => { if (c.x > this.player.x) rank++; });
-        
-        // ★★★ 追加: 結果保存 ★★★
-        this.engine.lastRank = rank;
-
-        if (rank === 1) {
-            const spawnCoins = () => {
-                if (this.engine.state !== 'RACE') return; 
-                for(let i=0; i<3; i++) {
-                    const type = Math.random();
-                    if(type < 0.7) { 
-                        this.particles.push({
-                            x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
-                            y: -50 - Math.random() * 50, 
-                            vx: (Math.random()-0.5) * 1,
-                            vy: 5 + Math.random() * 5, 
-                            color: '#ffd700', 
-                            life: 300, w: 20, isCoin: true,
-                            rot: Math.random() * Math.PI, rotSpeed: (Math.random()-0.5) * 0.2
-                        });
-                    } else { 
-                        this.particles.push({
-                             x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
-                             y: -50, vx: (Math.random()-0.5)*3, vy: 2 + Math.random()*3,
-                             color: `hsl(${Math.random()*360}, 100%, 50%)`, life: 300, w: 10
-                        });
-                    }
-                }
-                requestAnimationFrame(spawnCoins);
-            };
-            spawnCoins();
-        }
-
-        setTimeout(() => {
-            document.getElementById('result-rank').innerText = `${rank}着！`;
-            if (rank === 1) {
-                document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
-                
-                // 【修正】賞金の変更（隠し要素的に残す）
-                if (this.mode === 'GACHI') {
-                    document.getElementById('result-prize').innerText = "2026億";
-                } else {
-                    document.getElementById('result-prize').innerText = "2026万";
-                }
-            } else {
-                document.getElementById('result-msg').innerText = "残念...";
-                document.getElementById('result-prize').innerText = "0";
-            }
-            Game.toResult();
-        }, 5000); 
-    }
-
     draw(ctx) {
         ctx.fillStyle = "#87CEEB";
         ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
@@ -1507,10 +1446,16 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
     ctx.save();
     ctx.translate(x, y);
     
-    // スケール調整: 画像がある場合は縮小、ない場合は通常サイズ
-    // ★ ここで判定
+    // 画像アセットの取得
     const headImg = ASSETS.head[config.headIdx];
-    const hasImage = headImg && headImg.complete && headImg.naturalHeight !== 0;
+    const bodyImg = ASSETS.body[config.bodyIdx];
+    const legsImg = ASSETS.legs[config.legsIdx];
+
+    // ★★★ 修正: 全てのパーツがロード完了しているかチェックする関数 ★★★
+    const isLoaded = (img) => img && img.complete && img.naturalHeight !== 0;
+    
+    // ★★★ 修正: 頭・体・足すべてが揃っている場合のみ画像モードにする ★★★
+    const hasImage = isLoaded(headImg) && isLoaded(bodyImg) && isLoaded(legsImg);
 
     let currentScale = scale;
     if (hasImage) {
@@ -1526,19 +1471,25 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
 
     // ★ 画像があれば画像描画、なければ元の図形描画
     if (hasImage) {
-        const legsImg = ASSETS.legs[config.legsIdx];
-        const bodyImg = ASSETS.body[config.bodyIdx];
-
-        if (legsImg) drawPartImage(ctx, legsImg, c);
-        if (bodyImg) drawPartImage(ctx, bodyImg, c);
-        if (headImg) {
-            ctx.save();
-            if (isTired) ctx.rotate(Math.PI / 6);
-            drawPartImage(ctx, headImg, c);
-            ctx.restore();
+        // 画像モード: 重ね順に描画
+        drawPartImage(ctx, legsImg, c);
+        drawPartImage(ctx, bodyImg, c);
+        
+        ctx.save();
+        if (isTired) ctx.rotate(Math.PI / 6);
+        drawPartImage(ctx, headImg, c);
+        
+        // 汗（画像モード用）
+        if (isTired) {
+            ctx.fillStyle = "#00f";
+            ctx.font = "100px sans-serif";
+            ctx.fillText("💦", 100, 0);
         }
+        ctx.restore();
+
     } else {
         // --- フォールバック: 元の図形描画処理 ---
+        // 画像が1つでも欠けている場合はこちらが実行される
         ctx.fillStyle = "#000"; 
         let legSpeed = isTired ? 0.2 : 0.5;
         if (config.ability.type === 'god') legSpeed = 1.0;
@@ -1563,19 +1514,17 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
             ctx.beginPath(); ctx.arc(47, 0, 2, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
-        // --- フォールバック終了 ---
-    }
+        
+        // 汗（図形モード用）
+        if (isTired) {
+            ctx.fillStyle = "#00f";
+            ctx.font = "12px sans-serif";
+            ctx.fillText("💦", 10, 0);
+        }
 
-    if (isTired) {
-        ctx.fillStyle = "#00f";
-        // 文字サイズもモードによって変える
-        ctx.font = hasImage ? "100px sans-serif" : "12px sans-serif";
-        ctx.fillText("💦", hasImage ? 100 : 10, 0);
-    }
-
-    if (!hasImage) {
         ctx.fillStyle = "brown";
         ctx.fillRect(15, 10, 20, 15);
+        // --- フォールバック終了 ---
     }
 
     ctx.restore();
