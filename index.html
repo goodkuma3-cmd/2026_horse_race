@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (Hybrid Ver)</title>
+    <title>2026 HAPPY HORSE RACE (Image Custom Ver)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -70,7 +70,7 @@
             animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        /* ★★★ 追加: 動画画面用のスタイル ★★★ */
+        /* 動画画面用のスタイル */
         #screen-bonus-video {
             background-color: #000; /* 背景を黒に */
             z-index: 20; /* 最前面に */
@@ -95,7 +95,6 @@
             background: #000;
             margin-bottom: 20px;
         }
-        /* ★★★★★★★★★★★★★★★★★★★★★★★★★ */
 
         @keyframes popIn {
             from { transform: scale(0.8); opacity: 0; }
@@ -127,8 +126,7 @@
         }
         button.secondary { background: #4caf50; border-bottom-color: #1b5e20; }
         button.danger { background: #f44336; border-bottom-color: #b71c1c; }
-
-        /* ★★★ 追加: 特別なボタン（動画再生用）のスタイル ★★★ */
+        
         button.golden { 
             background: linear-gradient(to bottom, #ffd700, #ffb300);
             border-bottom-color: #b8860b;
@@ -141,7 +139,6 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        /* ★★★★★★★★★★★★★★★★★★★★★★★★★ */
 
         /* カスタマイズ画面用 */
         .parts-selector {
@@ -224,7 +221,7 @@
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
             
-            /* 【修正】連打対策：ダブルタップによるズームなどを完全に無効化 */
+            /* 連打対策 */
             touch-action: none !important; 
             -webkit-user-select: none;
             -webkit-touch-callout: none;
@@ -436,30 +433,27 @@
             <p style="font-size: 1.5rem; color: gold; text-shadow: 1px 1px 0 #000;">
                 賞金: <span id="result-prize">2026万</span>円
             </p>
-            <!-- ★★★ 変更: ID付与（JSで制御するため） ★★★ -->
             <button id="result-btn" onclick="Game.toTitle()">もう一度遊ぶ</button>
         </div>
     </div>
 
-    <!-- ★★★ 追加: ボーナス動画画面 ★★★ -->
+    <!-- ボーナス動画画面 -->
     <div id="screen-bonus-video" class="ui-layer hidden">
         <div class="ui-content">
             <h2 style="color:gold;">CONGRATULATIONS!!</h2>
-            <!-- ▼ここに再生したいmp4ファイルのパスを指定してください▼ -->
+            <!-- 動画ファイル名は bonus.mp4 としています -->
             <video id="bonus-video" src="bonus.mp4" controls playsinline></video>
-            <!-- ▲▲▲ -->
             <br>
             <button onclick="Game.toTitle()">タイトルへ戻る</button>
         </div>
     </div>
-    <!-- ★★★★★★★★★★★★★★★★★★★★★★★★★ -->
 
 </div>
 
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * v7: Custom Image Parts Support (Hybrid Fallback)
+ * v7: Custom Image Support with Fallback
  */
 
 // --- 設定・定数 ---
@@ -477,11 +471,11 @@ const CONFIG = {
     STAMINA_RECOVERY_ITEM: 40,
     GAME_DURATION_SEC: 30, 
     GROUND_Y: 350,
-    // ★★★ 842x595の画像をゲーム画面サイズに合わせるための基本スケール
-    BASE_IMAGE_SCALE: 0.14
+    // ★★★ 画像のスケール調整: 842px -> 約60px にするための倍率
+    BASE_IMAGE_SCALE: 0.15 
 };
 
-// ★★★ 画像のファイル名リスト ★★★
+// ★★★ 画像ファイル定義 ★★★
 const IMAGE_FILES = {
     head: ['head_01.png', 'head_02.png', 'head_03.png', 'head_04.png', 'head_05.png'],
     body: ['body_01.png', 'body_02.png', 'body_03.png', 'body_04.png', 'body_05.png'],
@@ -548,26 +542,24 @@ const ABILITIES = {
 const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
 
 // --- 画像アセット管理 ---
+// ★★★ 画像の読み込みと保持 ★★★
 const ASSETS = {
-    head: [],
-    body: [],
-    legs: []
+    head: [], body: [], legs: []
 };
-
-// 画像の読み込み処理
 function loadImages() {
     ['head', 'body', 'legs'].forEach(part => {
         const files = IMAGE_FILES[part];
         files.forEach(filename => {
             const img = new Image();
             img.src = filename;
+            // 読み込み完了かどうかは描画時に img.complete で判定します
             ASSETS[part].push(img);
         });
     });
 }
 loadImages();
 
-// 色合成用オフスクリーンキャンバス
+// 色合成用オフスクリーンキャンバス (サイズは画像の最大サイズに合わせる)
 const bufferCanvas = document.createElement('canvas');
 bufferCanvas.width = 842;
 bufferCanvas.height = 595;
@@ -755,7 +747,7 @@ function enableAudioOnFirstTouch() {
 window.addEventListener('load', enableAudioOnFirstTouch);
 
 
-// --- 馬クラス (先に定義) ---
+// --- 馬クラス (ここへ移動: 参照エラー防止のため) ---
 class Horse {
     constructor(isPlayer, config, x, y) {
         this.isPlayer = isPlayer;
@@ -804,7 +796,6 @@ class Horse {
             if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
             if (isGod) cost = 0; 
             this.stamina -= cost;
-            // ダッシュ音は連続しすぎないようにinput側で制御
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
             if(isGod) this.stamina = this.maxStamina;
@@ -893,6 +884,7 @@ class Horse {
         }
     }
 
+    // ★★★ 描画関数: ハイブリッド実装 ★★★
     draw(ctx) {
         if (this.invincible > 0 && Math.floor(this.invincible/4)%2===0) return;
         if (this.config.ability.type === 'god') {
@@ -902,6 +894,8 @@ class Horse {
             ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
             ctx.restore();
         }
+        
+        // ★ ハイブリッド描画呼び出し
         drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0);
     }
 }
@@ -923,7 +917,6 @@ class GameEngine {
             color: "#800000", ability: ABILITIES["#800000"]
         };
         
-        // ★★★ 追加: 結果保存用変数 ★★★
         this.currentMode = '';
         this.lastRank = 0;
 
@@ -978,15 +971,12 @@ class GameEngine {
         if (newState === 'RESULT') {
             document.getElementById('screen-result').classList.remove('hidden');
             
-            // ★★★ 追加: リザルト画面のボタン分岐処理 ★★★
             const btn = document.getElementById('result-btn');
             if (this.currentMode === 'GACHI' && this.lastRank === 1) {
-                // ガチモード1着
                 btn.innerHTML = "👑 ボーナス動画を見る 👑";
                 btn.classList.add("golden");
                 btn.onclick = () => this.showBonusVideo();
             } else {
-                // 通常
                 btn.innerText = "もう一度遊ぶ";
                 btn.classList.remove("golden");
                 btn.onclick = () => this.toTitle();
@@ -998,7 +988,6 @@ class GameEngine {
             document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
         }
         
-        // ★★★ 追加: 動画画面表示処理 ★★★
         if (newState === 'BONUS_VIDEO') {
             document.getElementById('screen-bonus-video').classList.remove('hidden');
             const video = document.getElementById('bonus-video');
@@ -1016,14 +1005,13 @@ class GameEngine {
 
     startRace(mode) {
         this.changeState('RACE');
-        this.currentMode = mode; // ★★★ 追加: モード保存
+        this.currentMode = mode; 
         this.race = new RaceSession(this, mode, this.playerConfig);
         Sound.stopBGM();
         if (this.loopId) cancelAnimationFrame(this.loopId);
         this.loop();
     }
     
-    // ★★★ 追加: 動画画面への遷移 ★★★
     showBonusVideo() {
         this.changeState('BONUS_VIDEO');
     }
@@ -1047,7 +1035,6 @@ class GameEngine {
         const pCtx = pCanvas.getContext('2d');
         const render = () => {
             if (this.state === 'CUSTOMIZE') {
-                // 【修正】プレビュー描画調整
                 // 300x200 のCanvas
                 pCtx.clearRect(0, 0, 300, 200);
                 pCtx.fillStyle = "#fff";
@@ -1061,6 +1048,7 @@ class GameEngine {
                 pCtx.stroke();
 
                 // 馬を少し縮小(1.7倍)して、位置を少し上に(130)調整して全体が入るようにする
+                // ここでは2.5倍にして描画（図形時）
                 drawHorse(pCtx, 100, 50, this.playerConfig, Date.now()/100, 2.5);
             }
             requestAnimationFrame(render);
@@ -1093,7 +1081,6 @@ class RaceSession {
         this.cpus[0].x = startX;
         this.cpus[1].x = startX;
         
-        // 敵の速度設定
         if (mode === 'GACHI') {
             this.cpus[0].baseSpeedMod = 1.00; 
             this.cpus[1].baseSpeedMod = 1.03; 
@@ -1441,7 +1428,8 @@ class RaceSession {
     }
 }
 
-// ★★★ 描画ロジックの書き換え (画像優先・フォールバック付き) ★★★
+// ★★★ 描画ロジックの修正: ハイブリッド描画システム ★★★
+// 画像があれば画像を表示し、なければ図形を描画する安全設計
 function drawHorse(ctx, x, y, config, frame, scale, isTired) {
     ctx.save();
     ctx.translate(x, y);
@@ -1451,27 +1439,28 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
     const bodyImg = ASSETS.body[config.bodyIdx];
     const legsImg = ASSETS.legs[config.legsIdx];
 
-    // ★★★ 修正: 全てのパーツがロード完了しているかチェックする関数 ★★★
+    // ★ 画像が「全て」正常にロード完了しているかチェック
     const isLoaded = (img) => img && img.complete && img.naturalHeight !== 0;
-    
-    // ★★★ 修正: 頭・体・足すべてが揃っている場合のみ画像モードにする ★★★
     const hasImage = isLoaded(headImg) && isLoaded(bodyImg) && isLoaded(legsImg);
 
     let currentScale = scale;
     if (hasImage) {
+        // 画像がある場合は大きすぎるので縮小
         currentScale = scale * CONFIG.BASE_IMAGE_SCALE;
     }
     ctx.scale(currentScale, currentScale);
     
-    let bounce = Math.sin(frame * 0.5) * (hasImage ? 50 : 5); // 跳ねる量を調整
+    // 跳ねる動き
+    let bounce = Math.sin(frame * 0.5) * (hasImage ? 50 : 5); 
     if (isTired) bounce *= 0.2;
     ctx.translate(0, bounce);
 
     const c = config.color;
 
-    // ★ 画像があれば画像描画、なければ元の図形描画
+    // --- 描画分岐 ---
     if (hasImage) {
-        // 画像モード: 重ね順に描画
+        // 【画像モード】
+        // 重ね順: 足 -> 体 -> 頭
         drawPartImage(ctx, legsImg, c);
         drawPartImage(ctx, bodyImg, c);
         
@@ -1479,7 +1468,6 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
         if (isTired) ctx.rotate(Math.PI / 6);
         drawPartImage(ctx, headImg, c);
         
-        // 汗（画像モード用）
         if (isTired) {
             ctx.fillStyle = "#00f";
             ctx.font = "100px sans-serif";
@@ -1488,8 +1476,8 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
         ctx.restore();
 
     } else {
-        // --- フォールバック: 元の図形描画処理 ---
-        // 画像が1つでも欠けている場合はこちらが実行される
+        // 【図形モード (フォールバック)】
+        // 従来通りの描画ロジック
         ctx.fillStyle = "#000"; 
         let legSpeed = isTired ? 0.2 : 0.5;
         if (config.ability.type === 'god') legSpeed = 1.0;
@@ -1515,7 +1503,6 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
         }
         ctx.restore();
         
-        // 汗（図形モード用）
         if (isTired) {
             ctx.fillStyle = "#00f";
             ctx.font = "12px sans-serif";
@@ -1524,13 +1511,12 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired) {
 
         ctx.fillStyle = "brown";
         ctx.fillRect(15, 10, 20, 15);
-        // --- フォールバック終了 ---
     }
 
     ctx.restore();
 }
 
-// ★★★ 画像の色変え描画関数 ★★★
+// ★★★ 画像の色変え描画関数 (Source-in合成) ★★★
 function drawPartImage(ctx, img, color) {
     // 1. バッファをクリア
     bCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
@@ -1538,17 +1524,19 @@ function drawPartImage(ctx, img, color) {
     // 2. 画像をバッファに描画
     bCtx.drawImage(img, 0, 0);
     
-    // 3. 色を source-in で合成
+    // 3. 色を source-in で合成 (シルエットを色で塗りつぶす)
     bCtx.globalCompositeOperation = 'source-in';
     bCtx.fillStyle = color;
     bCtx.fillRect(0, 0, bufferCanvas.width, bufferCanvas.height);
-    bCtx.globalCompositeOperation = 'source-over'; // 戻す
+    
+    // 設定を戻す
+    bCtx.globalCompositeOperation = 'source-over'; 
 
     // 4. メインキャンバスに描画 (中心合わせ)
     ctx.drawImage(bufferCanvas, -bufferCanvas.width/2, -bufferCanvas.height/2);
 }
 
-// ★★★ 復活: 元の図形描画関数 (名前を変更: drawPart -> drawPartShape) ★★★
+// ★★★ 図形描画関数 (旧 drawPart) ★★★
 function drawPartShape(ctx, typeIdx, x, y, color, w, h) {
     if (color === '#gold') ctx.fillStyle = `hsl(50, 100%, ${50 + Math.sin(Date.now()/200)*20}%)`;
     else ctx.fillStyle = color;
