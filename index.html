@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (Image Custom Ver)</title>
+    <title>2026 HAPPY HORSE RACE (Fixed)</title>
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -796,6 +796,7 @@ class Horse {
             if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
             if (isGod) cost = 0; 
             this.stamina -= cost;
+            // ダッシュ音は連続しすぎないようにinput側で制御
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
             if(isGod) this.stamina = this.maxStamina;
@@ -917,6 +918,7 @@ class GameEngine {
             color: "#800000", ability: ABILITIES["#800000"]
         };
         
+        // ★★★ 追加: 結果保存用変数 ★★★
         this.currentMode = '';
         this.lastRank = 0;
 
@@ -971,12 +973,15 @@ class GameEngine {
         if (newState === 'RESULT') {
             document.getElementById('screen-result').classList.remove('hidden');
             
+            // ★★★ 追加: リザルト画面のボタン分岐処理 ★★★
             const btn = document.getElementById('result-btn');
             if (this.currentMode === 'GACHI' && this.lastRank === 1) {
+                // ガチモード1着
                 btn.innerHTML = "👑 ボーナス動画を見る 👑";
                 btn.classList.add("golden");
                 btn.onclick = () => this.showBonusVideo();
             } else {
+                // 通常
                 btn.innerText = "もう一度遊ぶ";
                 btn.classList.remove("golden");
                 btn.onclick = () => this.toTitle();
@@ -988,6 +993,7 @@ class GameEngine {
             document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
         }
         
+        // ★★★ 追加: 動画画面表示処理 ★★★
         if (newState === 'BONUS_VIDEO') {
             document.getElementById('screen-bonus-video').classList.remove('hidden');
             const video = document.getElementById('bonus-video');
@@ -1005,13 +1011,14 @@ class GameEngine {
 
     startRace(mode) {
         this.changeState('RACE');
-        this.currentMode = mode; 
+        this.currentMode = mode; // ★★★ 追加: モード保存
         this.race = new RaceSession(this, mode, this.playerConfig);
         Sound.stopBGM();
         if (this.loopId) cancelAnimationFrame(this.loopId);
         this.loop();
     }
     
+    // ★★★ 追加: 動画画面への遷移 ★★★
     showBonusVideo() {
         this.changeState('BONUS_VIDEO');
     }
@@ -1035,6 +1042,7 @@ class GameEngine {
         const pCtx = pCanvas.getContext('2d');
         const render = () => {
             if (this.state === 'CUSTOMIZE') {
+                // 【修正】プレビュー描画調整
                 // 300x200 のCanvas
                 pCtx.clearRect(0, 0, 300, 200);
                 pCtx.fillStyle = "#fff";
@@ -1081,6 +1089,7 @@ class RaceSession {
         this.cpus[0].x = startX;
         this.cpus[1].x = startX;
         
+        // 敵の速度設定
         if (mode === 'GACHI') {
             this.cpus[0].baseSpeedMod = 1.00; 
             this.cpus[1].baseSpeedMod = 1.03; 
@@ -1094,6 +1103,69 @@ class RaceSession {
         this.generateLevel();
         this.particles = [];
         this.bubbles = [];
+    }
+
+    // ★★★ 先頭に配置して参照エラーを回避 ★★★
+    addBubble(x, y, text, color) {
+        this.bubbles.push({x, y, text, color, life: 60});
+    }
+
+    // ★★★ 先頭に配置して参照エラーを回避 ★★★
+    finishRace() {
+        this.finished = true;
+        Sound.playFanfare();
+
+        let rank = 1;
+        this.cpus.forEach(c => { if (c.x > this.player.x) rank++; });
+        
+        // ★★★ 追加: 結果保存 ★★★
+        this.engine.lastRank = rank;
+
+        if (rank === 1) {
+            const spawnCoins = () => {
+                if (this.engine.state !== 'RACE') return; 
+                for(let i=0; i<3; i++) {
+                    const type = Math.random();
+                    if(type < 0.7) { 
+                        this.particles.push({
+                            x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
+                            y: -50 - Math.random() * 50, 
+                            vx: (Math.random()-0.5) * 1,
+                            vy: 5 + Math.random() * 5, 
+                            color: '#ffd700', 
+                            life: 300, w: 20, isCoin: true,
+                            rot: Math.random() * Math.PI, rotSpeed: (Math.random()-0.5) * 0.2
+                        });
+                    } else { 
+                        this.particles.push({
+                             x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
+                             y: -50, vx: (Math.random()-0.5)*3, vy: 2 + Math.random()*3,
+                             color: `hsl(${Math.random()*360}, 100%, 50%)`, life: 300, w: 10
+                        });
+                    }
+                }
+                requestAnimationFrame(spawnCoins);
+            };
+            spawnCoins();
+        }
+
+        setTimeout(() => {
+            document.getElementById('result-rank').innerText = `${rank}着！`;
+            if (rank === 1) {
+                document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
+                
+                // 賞金の変更
+                if (this.mode === 'GACHI') {
+                    document.getElementById('result-prize').innerText = "2026億";
+                } else {
+                    document.getElementById('result-prize').innerText = "2026万";
+                }
+            } else {
+                document.getElementById('result-msg').innerText = "残念...";
+                document.getElementById('result-prize').innerText = "0";
+            }
+            Game.toResult();
+        }, 5000); 
     }
 
     generateLevel() {
