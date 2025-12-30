@@ -2,8 +2,21 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 HAPPY HORSE RACE (v8 Final)</title>
+
+    <!-- iPhoneのアドレスバー問題対策（表示領域をなるべく確保） -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <!-- ホーム画面追加時（iOS）で“2”になる問題の対策：アイコン指定 -->
+    <!-- ※同階層 or ルートに icon-180.png（180x180 PNG）を置いてください -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+    <meta name="apple-mobile-web-app-title" content="HORSE RACE">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <!-- ついでに通常のfaviconも（任意） -->
+    <link rel="icon" href="/favicon.ico">
+
+    <title>2026 HAPPY HORSE RACE (v8 Final + Back + Fullscreen)</title>
+
     <style>
         /* --- CSS スタイル定義 --- */
         body {
@@ -16,11 +29,17 @@
             touch-action: none; /* スマホでのピンチズーム等を無効化 */
             user-select: none;
             -webkit-user-select: none;
+
+            /* 高さは dvh を優先（iOSのアドレスバーで崩れにくい） */
             width: 100vw;
             height: 100vh;
+            height: 100dvh;
+
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            box-sizing: border-box;
         }
 
         #game-wrapper {
@@ -30,6 +49,7 @@
             box-shadow: 0 0 50px rgba(0,0,0,0.5);
             background: linear-gradient(to bottom, #87CEEB, #E0F7FA);
             overflow: hidden;
+            transform-origin: center center;
         }
 
         canvas {
@@ -184,7 +204,6 @@
             background: #fff;
             border-radius: 10px;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
-            /* キャンバス自体のサイズはHTML属性で指定 */
         }
 
         /* ゲーム内UI（タッチボタン等） */
@@ -246,11 +265,10 @@
             margin: 0 auto;
         }
 
-        /* 音声切り替えボタン */
-        #sound-switch {
+        /* 上部の丸ボタン群（戻る・音・全画面） */
+        .top-bubble-btn {
             position: absolute;
             top: 15px;
-            left: 15px;
             width: 40px;
             height: 40px;
             background: rgba(0, 0, 0, 0.6);
@@ -268,34 +286,12 @@
             transition: transform 0.1s, opacity 0.2s;
             touch-action: manipulation;
         }
-        #sound-switch:active {
-            transform: scale(0.9);
-        }
+        .top-bubble-btn:active { transform: scale(0.9); }
+        .top-bubble-btn.disabled { opacity: 0.35; pointer-events: none; }
 
-        /* ★ 追加: 全画面ボタン */
-        #fullscreen-switch {
-            position: absolute;
-            top: 15px;
-            left: 65px; /* sound-switchの右隣 */
-            width: 40px;
-            height: 40px;
-            background: rgba(0, 0, 0, 0.6);
-            color: #fff;
-            border: 2px solid #fff;
-            border-radius: 50%;
-            font-size: 18px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            z-index: 999;
-            user-select: none;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            transition: transform 0.1s, opacity 0.2s;
-            touch-action: manipulation;
-        }
-        #fullscreen-switch:active { transform: scale(0.9); }
-        #fullscreen-switch.disabled { opacity: 0.35; }
+        #btn-back { left: 15px; font-size: 22px; }
+        #sound-switch { left: 65px; }
+        #fullscreen-switch { left: 115px; font-size: 18px; }
 
         /* 横画面対応用スタイル */
         #landscape-warning {
@@ -345,6 +341,7 @@
             h2 { font-size: 1.2rem; margin: 5px 0; }
             p { font-size: 0.8rem; margin: 5px 0; }
         }
+
     </style>
 </head>
 <body>
@@ -359,10 +356,14 @@
 <div id="game-wrapper">
     <canvas id="main-canvas" width="800" height="450"></canvas>
 
+    <!-- 戻るボタン（追加） -->
+    <div id="btn-back" class="top-bubble-btn">←</div>
+
     <!-- 音声切り替えボタン -->
-    <div id="sound-switch">🔊</div>
-    <!-- ★ 追加: 全画面切り替えボタン -->
-    <div id="fullscreen-switch" title="全画面">⛶</div>
+    <div id="sound-switch" class="top-bubble-btn">🔊</div>
+
+    <!-- 全画面ボタン（追加） -->
+    <div id="fullscreen-switch" class="top-bubble-btn" title="Fullscreen">⛶</div>
 
     <!-- タイトル画面 -->
     <div id="screen-title" class="ui-layer">
@@ -467,7 +468,6 @@
     <div id="screen-bonus-video" class="ui-layer hidden">
         <div class="ui-content">
             <h2 style="color:gold;">CONGRATULATIONS!!</h2>
-            <!-- 動画ファイル名は bonus.mp4 としています -->
             <video id="bonus-video" src="bonus.mp4" controls playsinline></video>
             <br>
             <button onclick="Game.toTitle()">タイトルへ戻る</button>
@@ -479,7 +479,7 @@
 <script>
 /**
  * 2026 HAPPY HORSE RACE
- * v8 Final
+ * v8 Final + Back + Fullscreen + CPU speed tweak
  */
 
 // --- 設定・定数 ---
@@ -513,7 +513,6 @@ function resizeGame() {
     const winW = window.innerWidth;
     const winH = window.innerHeight;
 
-    // ゲームのアスペクト比 (16:9)
     const gameAspect = CONFIG.CANVAS_WIDTH / CONFIG.CANVAS_HEIGHT;
     const winAspect = winW / winH;
 
@@ -569,8 +568,7 @@ const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
 const ASSETS = { head: [], body: [], legs: [] };
 function loadImages() {
     ['head', 'body', 'legs'].forEach(part => {
-        const files = IMAGE_FILES[part];
-        files.forEach(filename => {
+        IMAGE_FILES[part].forEach(filename => {
             const img = new Image();
             img.src = filename;
             ASSETS[part].push(img);
@@ -598,17 +596,14 @@ class Synthesizer {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.ctx = new AudioContext();
         }
-        if (this.ctx.state === 'suspended') {
-            this.ctx.resume();
-        }
+        if (this.ctx.state === 'suspended') this.ctx.resume();
     }
 
     toggleMute() {
         this.isMuted = !this.isMuted;
         this.updateBtn();
-        if (this.isMuted) {
-            this.stopBGM();
-        } else {
+        if (this.isMuted) this.stopBGM();
+        else {
             if (window.Game && window.Game.state === 'RACE' && window.Game.race && !window.Game.race.finished && !window.Game.race.isCountingDown) {
                 this.startRaceBGM();
             }
@@ -653,10 +648,7 @@ class Synthesizer {
         osc.stop(t + 0.2);
     }
 
-    playDash() {
-        if (!this.ctx || this.isMuted) return;
-        this.playTone(100, 'sawtooth', 0.1, 0.05);
-    }
+    playDash() { if (!this.ctx || this.isMuted) return; this.playTone(100, 'sawtooth', 0.1, 0.05); }
 
     playItem(type) {
         if (!this.ctx || this.isMuted) return;
@@ -712,7 +704,7 @@ class Synthesizer {
         this.stopBGM();
         const now = this.ctx.currentTime;
         const melody = [523, 523, 523, 659, 783, 783, 659, 783, 1046];
-        const lens =   [0.1, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.8];
+        const lens   = [0.1, 0.1, 0.1, 0.2, 0.2, 0.1, 0.1, 0.1, 0.8];
         let t = now;
         melody.forEach((freq, i) => {
             this.playTone(freq, 'square', lens[i], 0.1, t - now);
@@ -739,18 +731,14 @@ class Synthesizer {
             gain.connect(this.ctx.destination);
             osc.start(t);
             osc.stop(t + 0.2);
-            if (beat % 2 === 0) {
-                 this.playTone(800, 'square', 0.05, 0.02);
-            }
+            if (beat % 2 === 0) this.playTone(800, 'square', 0.05, 0.02);
             beat++;
             this.bgmTimer = setTimeout(loop, 125);
         };
         loop();
     }
 
-    stopBGM() {
-        if (this.bgmTimer) clearTimeout(this.bgmTimer);
-    }
+    stopBGM() { if (this.bgmTimer) clearTimeout(this.bgmTimer); }
 }
 const Sound = new Synthesizer();
 
@@ -797,7 +785,6 @@ class Horse {
         const ab = this.config.ability;
         const isGod = ab.type === 'god';
 
-        // 攻撃処理
         let shootReq = false;
         if (this.shootCooldown > 0) this.shootCooldown--;
         if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
@@ -805,7 +792,6 @@ class Horse {
             this.shootCooldown = 30;
         }
 
-        // ダッシュ処理
         if (input.dash && this.stamina > 0) {
             let mult = CONFIG.DASH_SPEED_MULT;
             if (isGod) mult *= 2.0;
@@ -816,7 +802,7 @@ class Horse {
             this.stamina -= cost;
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
-            if(isGod) this.stamina = this.maxStamina;
+            if (isGod) this.stamina = this.maxStamina;
         }
 
         if (this.stamina <= 0) {
@@ -911,6 +897,7 @@ class Horse {
             ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
             ctx.restore();
         }
+
         drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0, this.isPlayer);
     }
 }
@@ -972,58 +959,6 @@ class GameEngine {
             Sound.init();
             Sound.toggleMute();
         });
-
-        // ★ 追加: 全画面切り替え
-        const fsBtn = document.getElementById('fullscreen-switch');
-        const wrapper = document.getElementById('game-wrapper');
-
-        const isFullscreenSupported = () => {
-            return !!(document.fullscreenEnabled && wrapper.requestFullscreen);
-        };
-
-        const updateFsBtn = () => {
-            if (!isFullscreenSupported()) fsBtn.classList.add('disabled');
-            else fsBtn.classList.remove('disabled');
-            fsBtn.innerText = document.fullscreenElement ? "⤢" : "⛶";
-        };
-
-        const showFullscreenHintForIOS = () => {
-            alert(
-                "このブラウザでは全画面表示が制限されています。\n\n" +
-                "iPhoneの場合は\n" +
-                "共有ボタン →「ホーム画面に追加」\n" +
-                "で全画面っぽく遊べます！"
-            );
-        };
-
-        fsBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            Sound.init();
-
-            try {
-                if (document.fullscreenElement) {
-                    await document.exitFullscreen();
-                } else {
-                    if (!isFullscreenSupported()) {
-                        showFullscreenHintForIOS();
-                        return;
-                    }
-                    await wrapper.requestFullscreen({ navigationUI: "hide" });
-                }
-            } catch (err) {
-                showFullscreenHintForIOS();
-            } finally {
-                updateFsBtn();
-                resizeGame();
-            }
-        });
-
-        document.addEventListener('fullscreenchange', () => {
-            updateFsBtn();
-            resizeGame();
-        });
-
-        updateFsBtn();
     }
 
     changeState(newState) {
@@ -1066,6 +1001,9 @@ class GameEngine {
             if(video) video.pause();
         }
 
+        // 戻るボタンの活性/非表示制御
+        updateBackButton();
+
         Sound.init();
     }
 
@@ -1078,9 +1016,7 @@ class GameEngine {
         this.loop();
     }
 
-    showBonusVideo() {
-        this.changeState('BONUS_VIDEO');
-    }
+    showBonusVideo() { this.changeState('BONUS_VIDEO'); }
 
     toTitle() {
         this.changeState('TITLE');
@@ -1140,13 +1076,12 @@ class RaceSession {
             new Horse(false, {color: "#8b4513", headIdx:2, bodyIdx:2, legsIdx:0, ability: ABILITIES["#8b4513"]}, startX, CONFIG.GROUND_Y),
             new Horse(false, {color: "#ffa500", headIdx:1, bodyIdx:1, legsIdx:1, ability: ABILITIES["#ffa500"]}, startX, CONFIG.GROUND_Y)
         ];
-        this.cpus[0].x = startX;
-        this.cpus[1].x = startX;
 
-        // ★ 修正: 敵の速度（ガチを少し遅く）
+        // 敵の速度設定（★ガチの敵が速すぎる件の調整）
         if (mode === 'GACHI') {
-            this.cpus[0].baseSpeedMod = 0.98;
-            this.cpus[1].baseSpeedMod = 1.00;
+            // 旧: 1.00 / 1.03 → 少しだけ遅く
+            this.cpus[0].baseSpeedMod = 0.985;
+            this.cpus[1].baseSpeedMod = 1.005;
         } else {
             this.cpus[0].baseSpeedMod = 0.90;
             this.cpus[1].baseSpeedMod = 0.98;
@@ -1169,7 +1104,6 @@ class RaceSession {
 
         let rank = 1;
         this.cpus.forEach(c => { if (c.x > this.player.x) rank++; });
-
         this.engine.lastRank = rank;
 
         if (rank === 1) {
@@ -1204,12 +1138,8 @@ class RaceSession {
             document.getElementById('result-rank').innerText = `${rank}着！`;
             if (rank === 1) {
                 document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
-
-                if (this.mode === 'GACHI') {
-                    document.getElementById('result-prize').innerText = "2026億";
-                } else {
-                    document.getElementById('result-prize').innerText = "2026万";
-                }
+                if (this.mode === 'GACHI') document.getElementById('result-prize').innerText = "2026億";
+                else document.getElementById('result-prize').innerText = "2026万";
             } else {
                 document.getElementById('result-msg').innerText = "残念...";
                 document.getElementById('result-prize').innerText = "0";
@@ -1256,13 +1186,9 @@ class RaceSession {
                 this.countDownText = "";
                 this.isCountingDown = false;
                 Sound.startRaceBGM();
-            } else if (this.countDownTimer > 120) {
-                this.countDownText = "位置について...";
-            } else if (this.countDownTimer > 60) {
-                this.countDownText = "よーい...";
-            } else {
-                this.countDownText = "ドン！";
-            }
+            } else if (this.countDownTimer > 120) this.countDownText = "位置について...";
+            else if (this.countDownTimer > 60) this.countDownText = "よーい...";
+            else this.countDownText = "ドン！";
             return;
         }
 
@@ -1274,18 +1200,14 @@ class RaceSession {
         const shootReq = this.player.update(effectiveInput, this.entities, playerSpeedMod, this.frame);
         if (shootReq) {
             Sound.playShoot();
-            this.bullets.push({
-                x: this.player.x + 50, y: this.player.y + 20,
-                vx: 12, vy: 0,
-                life: 60, w: 20
-            });
+            this.bullets.push({ x: this.player.x + 50, y: this.player.y + 20, vx: 12, vy: 0, life: 60, w: 20 });
             this.addBubble(this.player.x, this.player.y-40, "ファイア!", "#f44336");
         }
 
         this.cameraX = this.player.x - 150;
         if (this.cameraX < 0) this.cameraX = 0;
 
-        this.cpus.forEach((cpu, i) => {
+        this.cpus.forEach((cpu) => {
             let jump = false;
             let dash = false;
             let speedMod = cpu.baseSpeedMod;
@@ -1306,14 +1228,11 @@ class RaceSession {
                 if (this.mode === 'HAPPY') {
                     if (cpu.x > this.goalX - 600) {
                         dash = false;
-                        if (cpu.x > this.goalX - 300) {
-                            cpu.vx = -2; cpu.stamina = 0;
-                        } else {
-                            cpu.vx = 0;
-                        }
+                        if (cpu.x > this.goalX - 300) { cpu.vx = -2; cpu.stamina = 0; }
+                        else { cpu.vx = 0; }
                         speedMod = 0.5;
                         if (this.frame % 120 === 0) {
-                            const accidents = [ "トイレ行きたい", "あ、UFOだ", "Zzz...", "馬刺し食べて〜"];
+                            const accidents = [ "トイレ行きたい", "あ、UFOだ", "Zzz...", "馬刺し食べて〜" ];
                             const msg = accidents[Math.floor(Math.random() * accidents.length)];
                             this.addBubble(cpu.x, cpu.y - 60, msg, "#ff9");
                         }
@@ -1338,9 +1257,7 @@ class RaceSession {
         });
         this.bullets = this.bullets.filter(b => b.life > 0);
 
-        this.entities.forEach(e => {
-            if (e.type === 'enemy_moving' && e.alive) e.x += e.vx;
-        });
+        this.entities.forEach(e => { if (e.type === 'enemy_moving' && e.alive) e.x += e.vx; });
 
         if (!this.finished) {
             this.entities.forEach(e => {
@@ -1513,7 +1430,6 @@ class RaceSession {
 
         ctx.restore();
 
-        // --- HUD ---
         if (this.isCountingDown) {
             ctx.fillStyle = "rgba(0,0,0,0.5)";
             ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
@@ -1550,6 +1466,7 @@ class RaceSession {
     }
 }
 
+// --- 描画（ハイブリッド） ---
 function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
     ctx.save();
     ctx.translate(x, y);
@@ -1594,7 +1511,6 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
         drawPartShape(ctx, config.legsIdx, -10 + legOffset, 30, c, 10, 20);
         drawPartShape(ctx, config.legsIdx, 30 - legOffset, 30, c, 10, 20);
 
-        ctx.fillStyle = c;
         drawPartShape(ctx, config.bodyIdx, 0, 10, c, 50, 30);
 
         ctx.save();
@@ -1626,15 +1542,11 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
 
 function drawPartImage(ctx, img, color) {
     bCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
-
     bCtx.drawImage(img, 0, 0);
-
     bCtx.globalCompositeOperation = 'source-in';
     bCtx.fillStyle = color;
     bCtx.fillRect(0, 0, bufferCanvas.width, bufferCanvas.height);
-
     bCtx.globalCompositeOperation = 'source-over';
-
     ctx.drawImage(bufferCanvas, -bufferCanvas.width/2, -bufferCanvas.height/2);
 }
 
@@ -1661,7 +1573,7 @@ function drawGoal(ctx, x) {
     const size = 20;
     for(let i=0; i<10; i++) {
         for(let j=0; j<8; j++) {
-            if ((i+j)%2===0) ctx.fillStyle = "#000"; else ctx.fillStyle = "#fff";
+            ctx.fillStyle = ((i+j)%2===0) ? "#000" : "#fff";
             ctx.fillRect(x + 20 + i*size, CONFIG.GROUND_Y - 150 + j*size, size, size);
         }
     }
@@ -1677,6 +1589,7 @@ function checkRectCollide(r1, r2) {
 
 // --- グローバル管理 ---
 const Game = new GameEngine();
+
 const Customizer = {
     changePart: (part, dir) => {
         let idx = Game.playerConfig[part + "Idx"];
@@ -1695,7 +1608,8 @@ const Customizer = {
             Game.playerConfig.color = color;
             Game.playerConfig.ability = ABILITIES[color] || {type:'normal', name:'ノーマル'};
             document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
-            document.getElementById(`btn-${color}`).classList.add('selected');
+            const el = document.getElementById(`btn-${color}`);
+            if (el) el.classList.add('selected');
         }
 
         let desc = Game.playerConfig.ability.name;
@@ -1706,7 +1620,75 @@ const Customizer = {
     }
 };
 
+// ===== 戻るボタン（追加） =====
+function updateBackButton() {
+    const btn = document.getElementById('btn-back');
+    if (!btn) return;
+
+    // タイトル・レース中は戻るを出さない（誤操作防止）
+    if (Game.state === 'TITLE' || Game.state === 'RACE') {
+        btn.classList.add('disabled');
+        btn.style.display = 'none';
+        return;
+    }
+    btn.style.display = 'flex';
+    btn.classList.remove('disabled');
+}
+
+function handleBack() {
+    // stateごとの「前に戻る」を定義（分かりやすい固定遷移）
+    if (Game.state === 'CUSTOMIZE') {
+        Game.toTitle();
+    } else if (Game.state === 'MODE') {
+        Game.toCustomize();
+    } else if (Game.state === 'RESULT' || Game.state === 'BONUS_VIDEO') {
+        Game.toTitle();
+    } else {
+        // HOWTOなどは閉じる
+        Game.hideHowTo();
+    }
+}
+
+// ===== 全画面（追加） =====
+async function toggleFullscreen() {
+    const wrapper = document.getElementById('game-wrapper');
+    const btn = document.getElementById('fullscreen-switch');
+
+    // Fullscreen APIがあるブラウザ（Android Chrome / PC 等）
+    const canFS = wrapper && (wrapper.requestFullscreen || wrapper.webkitRequestFullscreen);
+    const isFS = document.fullscreenElement || document.webkitFullscreenElement;
+
+    try {
+        if (canFS) {
+            if (!isFS) {
+                if (wrapper.requestFullscreen) await wrapper.requestFullscreen({ navigationUI: "hide" });
+                else await wrapper.webkitRequestFullscreen();
+                if (btn) btn.textContent = "⤢";
+            } else {
+                if (document.exitFullscreen) await document.exitFullscreen();
+                else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+                if (btn) btn.textContent = "⛶";
+            }
+            // 全画面切替後は念のためリサイズ
+            setTimeout(resizeGame, 50);
+            return;
+        }
+
+        // iPhone Safari は requestFullscreen が基本使えないので、代替として「アドレスバー隠し」を試す
+        // （効果は端末/OS/状態により差があります）
+        window.scrollTo(0, 1);
+        setTimeout(() => window.scrollTo(0, 1), 50);
+
+        // それでも変わらない場合は「ホーム画面に追加」が最強
+        alert("iPhone Safariはボタンで完全な全画面化が難しいです。\n『共有 → ホーム画面に追加』で起動するとアドレスバー無しで遊べます。");
+    } catch (e) {
+        console.log(e);
+        alert("全画面にできませんでした。iPhoneは『ホーム画面に追加』が確実です。");
+    }
+}
+
 window.onload = () => {
+    // カラーパレット生成
     const palette = document.getElementById('color-palette');
     PALETTE_COLORS.forEach(c => {
         const btn = document.createElement('div');
@@ -1726,13 +1708,52 @@ window.onload = () => {
 
     window.Game = Game;
     window.Customizer = Customizer;
+
     Game.toCustomize = () => Game.changeState('CUSTOMIZE');
     Game.toModeSelect = () => Game.changeState('MODE');
     Game.startGame = (mode) => Game.startRace(mode);
     Game.toTitle = () => { Game.changeState('TITLE'); Game.race = null; };
     Game.toResult = () => Game.changeState('RESULT');
-    Game.showHowTo = () => document.getElementById('screen-howto').classList.remove('hidden');
-    Game.hideHowTo = () => document.getElementById('screen-howto').classList.add('hidden');
+    Game.showHowTo = () => {
+        document.getElementById('screen-howto').classList.remove('hidden');
+        // 「画面遷移」扱いにして戻る有効化したいので state を寄せる
+        Game.state = 'HOWTO';
+        updateBackButton();
+    };
+    Game.hideHowTo = () => {
+        document.getElementById('screen-howto').classList.add('hidden');
+        // HOWTOを閉じると、基本はTITLEに戻す（既存仕様踏襲）
+        Game.changeState('TITLE');
+    };
+
+    // 戻るボタン
+    document.getElementById('btn-back').addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleBack();
+    });
+
+    // 全画面ボタン
+    document.getElementById('fullscreen-switch').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFullscreen();
+    });
+
+    // フルスクリーン状態変化でボタン表示を同期
+    document.addEventListener('fullscreenchange', () => {
+        const btn = document.getElementById('fullscreen-switch');
+        const isFS = !!document.fullscreenElement;
+        if (btn) btn.textContent = isFS ? "⤢" : "⛶";
+        setTimeout(resizeGame, 50);
+    });
+    document.addEventListener('webkitfullscreenchange', () => {
+        const btn = document.getElementById('fullscreen-switch');
+        const isFS = !!document.webkitFullscreenElement;
+        if (btn) btn.textContent = isFS ? "⤢" : "⛶";
+        setTimeout(resizeGame, 50);
+    });
+
+    // 初期の戻るボタン状態
+    updateBackButton();
 };
 </script>
 </body>
