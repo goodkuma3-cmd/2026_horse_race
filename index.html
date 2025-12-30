@@ -126,8 +126,8 @@
         }
         button.secondary { background: #4caf50; border-bottom-color: #1b5e20; }
         button.danger { background: #f44336; border-bottom-color: #b71c1c; }
-        
-        button.golden { 
+
+        button.golden {
             background: linear-gradient(to bottom, #ffd700, #ffb300);
             border-bottom-color: #b8860b;
             color: #000;
@@ -149,7 +149,7 @@
         }
         .part-group { text-align: center; }
         .part-group button { padding: 5px 10px; font-size: 0.8rem; }
-        
+
         .color-grid {
             display: grid;
             grid-template-columns: repeat(10, 1fr); /* 10列 */
@@ -167,7 +167,7 @@
             touch-action: manipulation;
         }
         .color-btn.selected { border: 3px solid #000; transform: scale(1.2); z-index: 10;}
-        
+
         /* 隠しボタン用 */
         .color-btn.secret {
             background-color: transparent !important;
@@ -220,9 +220,9 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
-            
+
             /* 連打対策 */
-            touch-action: none !important; 
+            touch-action: none !important;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
         }
@@ -231,7 +231,7 @@
             background: rgba(255, 255, 255, 0.6);
         }
         #btn-dash { background: rgba(255, 165, 0, 0.5); }
-        #btn-fire { background: rgba(220, 20, 60, 0.6); display: none; width: 60px; height: 60px; font-size: 0.8rem; } 
+        #btn-fire { background: rgba(220, 20, 60, 0.6); display: none; width: 60px; height: 60px; font-size: 0.8rem; }
         #btn-jump { background: rgba(30, 144, 255, 0.5); width: 80px; height: 80px; font-size: 1rem; }
 
         .hidden { display: none !important; }
@@ -265,12 +265,37 @@
             z-index: 999; /* UIより前面に */
             user-select: none;
             box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            transition: transform 0.1s;
+            transition: transform 0.1s, opacity 0.2s;
             touch-action: manipulation;
         }
         #sound-switch:active {
             transform: scale(0.9);
         }
+
+        /* ★ 追加: 全画面ボタン */
+        #fullscreen-switch {
+            position: absolute;
+            top: 15px;
+            left: 65px; /* sound-switchの右隣 */
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            font-size: 18px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 999;
+            user-select: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            transition: transform 0.1s, opacity 0.2s;
+            touch-action: manipulation;
+        }
+        #fullscreen-switch:active { transform: scale(0.9); }
+        #fullscreen-switch.disabled { opacity: 0.35; }
 
         /* 横画面対応用スタイル */
         #landscape-warning {
@@ -320,7 +345,6 @@
             h2 { font-size: 1.2rem; margin: 5px 0; }
             p { font-size: 0.8rem; margin: 5px 0; }
         }
-
     </style>
 </head>
 <body>
@@ -337,6 +361,8 @@
 
     <!-- 音声切り替えボタン -->
     <div id="sound-switch">🔊</div>
+    <!-- ★ 追加: 全画面切り替えボタン -->
+    <div id="fullscreen-switch" title="全画面">⛶</div>
 
     <!-- タイトル画面 -->
     <div id="screen-title" class="ui-layer">
@@ -463,15 +489,15 @@ const CONFIG = {
     GRAVITY: 0.6,
     JUMP_POWER: -12,
     BASE_SPEED: 5,
-    DASH_SPEED_MULT: 1.6, 
+    DASH_SPEED_MULT: 1.6,
     TIRED_SPEED_MULT: 0.5,
     MAX_STAMINA: 100,
     STAMINA_COST_DASH: 1.0,
     STAMINA_RECOVERY_BASE: 0.3,
     STAMINA_RECOVERY_ITEM: 40,
-    GAME_DURATION_SEC: 30, 
+    GAME_DURATION_SEC: 30,
     GROUND_Y: 350,
-    BASE_IMAGE_SCALE: 0.15 
+    BASE_IMAGE_SCALE: 0.15
 };
 
 // 画像ファイル定義
@@ -486,7 +512,7 @@ function resizeGame() {
     const wrapper = document.getElementById('game-wrapper');
     const winW = window.innerWidth;
     const winH = window.innerHeight;
-    
+
     // ゲームのアスペクト比 (16:9)
     const gameAspect = CONFIG.CANVAS_WIDTH / CONFIG.CANVAS_HEIGHT;
     const winAspect = winW / winH;
@@ -502,7 +528,6 @@ function resizeGame() {
 }
 window.addEventListener('resize', resizeGame);
 window.addEventListener('load', resizeGame);
-
 
 // --- 色と能力の定義 ---
 const ABILITIES = {
@@ -541,9 +566,7 @@ const ABILITIES = {
 const PALETTE_COLORS = Object.keys(ABILITIES).filter(k => k !== "SECRET");
 
 // --- 画像アセット管理 ---
-const ASSETS = {
-    head: [], body: [], legs: []
-};
+const ASSETS = { head: [], body: [], legs: [] };
 function loadImages() {
     ['head', 'body', 'legs'].forEach(part => {
         const files = IMAGE_FILES[part];
@@ -561,7 +584,6 @@ const bufferCanvas = document.createElement('canvas');
 bufferCanvas.width = 842;
 bufferCanvas.height = 595;
 const bCtx = bufferCanvas.getContext('2d');
-
 
 // --- 音声生成マネージャー ---
 class Synthesizer {
@@ -632,7 +654,7 @@ class Synthesizer {
     }
 
     playDash() {
-        if (!this.ctx || this.isMuted) return; 
+        if (!this.ctx || this.isMuted) return;
         this.playTone(100, 'sawtooth', 0.1, 0.05);
     }
 
@@ -669,7 +691,7 @@ class Synthesizer {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         const filter = this.ctx.createBiquadFilter();
-        
+
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(800, t);
         osc.frequency.exponentialRampToValueAtTime(100, t + 0.2);
@@ -743,30 +765,29 @@ function enableAudioOnFirstTouch() {
 }
 window.addEventListener('load', enableAudioOnFirstTouch);
 
-
 // --- 馬クラス ---
 class Horse {
     constructor(isPlayer, config, x, y) {
         this.isPlayer = isPlayer;
-        this.config = config; 
+        this.config = config;
         this.x = x;
         this.y = y;
         this.vx = 0;
         this.vy = 0;
         this.w = 50;
         this.h = 50;
-        this.scale = config.ability.scale || 1.0; 
+        this.scale = config.ability.scale || 1.0;
         this.onGround = false;
-        this.baseSpeedMod = 1.0; 
-        
+        this.baseSpeedMod = 1.0;
+
         this.stamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
         this.maxStamina = (config.ability.type === 'glass') ? 30 : CONFIG.MAX_STAMINA;
-        
+
         this.jumpCount = 0;
         this.maxJumps = config.ability.jumps || 1;
         if (config.ability.type === 'god') this.maxJumps = 999;
 
-        this.invincible = 0; 
+        this.invincible = 0;
         this.shootCooldown = 0;
         this.animationFrame = 0;
     }
@@ -781,19 +802,18 @@ class Horse {
         if (this.shootCooldown > 0) this.shootCooldown--;
         if (input.action && (ab.type === 'shoot' || isGod) && this.shootCooldown === 0) {
             shootReq = true;
-            this.shootCooldown = 30; 
+            this.shootCooldown = 30;
         }
 
         // ダッシュ処理
         if (input.dash && this.stamina > 0) {
             let mult = CONFIG.DASH_SPEED_MULT;
-            if (isGod) mult *= 2.0; 
+            if (isGod) mult *= 2.0;
             targetSpeed *= mult;
             let cost = CONFIG.STAMINA_COST_DASH;
-            if (ab.staminaSave) cost *= (1 - ab.staminaSave); 
-            if (isGod) cost = 0; 
+            if (ab.staminaSave) cost *= (1 - ab.staminaSave);
+            if (isGod) cost = 0;
             this.stamina -= cost;
-            // ダッシュ音は連続しすぎないようにinput側で制御
         } else {
             this.stamina = Math.min(this.maxStamina, this.stamina + CONFIG.STAMINA_RECOVERY_BASE);
             if(isGod) this.stamina = this.maxStamina;
@@ -805,17 +825,17 @@ class Horse {
         }
 
         if (ab.speedBonus) targetSpeed *= ab.speedBonus;
-        if (isGod) targetSpeed *= 1.5; 
+        if (isGod) targetSpeed *= 1.5;
 
         if (ab.type === 'accel') {
-            const factor = Math.min(2.0, 0.8 + (frame / 1800)); 
+            const factor = Math.min(2.0, 0.8 + (frame / 1800));
             targetSpeed *= factor;
         } else if (ab.type === 'decel') {
             const factor = Math.max(0.6, 1.5 - (frame / 1800));
             targetSpeed *= factor;
         }
 
-        if (ab.type === 'glass' && this.stamina <= 0) targetSpeed *= 1.5; 
+        if (ab.type === 'glass' && this.stamina <= 0) targetSpeed *= 1.5;
 
         const finalTargetSpeed = targetSpeed * speedMod;
         this.vx += (finalTargetSpeed - this.vx) * 0.1;
@@ -829,8 +849,8 @@ class Horse {
                 let power = CONFIG.JUMP_POWER;
                 if (ab.jumpBonus) power *= ab.jumpBonus;
                 if (this.stamina <= 0) power *= 0.7;
-                if (isGod) power *= 1.2; 
-                
+                if (isGod) power *= 1.2;
+
                 this.vy = power;
                 this.onGround = false;
                 this.jumpCount++;
@@ -851,12 +871,12 @@ class Horse {
 
         if (this.invincible > 0) this.invincible--;
         this.animationFrame++;
-        
+
         return shootReq;
     }
 
     damage() {
-        if (this.config.ability.type === 'god') return; 
+        if (this.config.ability.type === 'god') return;
         this.vx = -5;
         this.stamina = Math.max(0, this.stamina - 20);
         this.invincible = 60;
@@ -866,9 +886,9 @@ class Horse {
         let heal = 0;
         if (kind === 'carrot') heal = CONFIG.STAMINA_RECOVERY_ITEM;
         if (kind === 'drink') heal = CONFIG.MAX_STAMINA;
-        
+
         if (kind === 'bone') {
-            if (this.config.ability.type === 'god') return; 
+            if (this.config.ability.type === 'god') return;
             this.stamina = Math.max(0, this.stamina - 30);
             this.vx *= 0.1;
         } else if (kind === 'big') {
@@ -882,7 +902,6 @@ class Horse {
         }
     }
 
-    // ★★★ 描画関数: ハイブリッド実装 ★★★
     draw(ctx) {
         if (this.invincible > 0 && Math.floor(this.invincible/4)%2===0) return;
         if (this.config.ability.type === 'god') {
@@ -892,13 +911,9 @@ class Horse {
             ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
             ctx.restore();
         }
-        
-        // ★ ハイブリッド描画呼び出し
-        // プレイヤーの場合だけ画像チェック、敵は常に図形モードにするため isPlayer を渡す
         drawHorse(ctx, this.x, this.y, this.config, this.animationFrame, this.scale, this.stamina <= 0, this.isPlayer);
     }
 }
-
 
 // --- ゲームエンジン ---
 class GameEngine {
@@ -908,15 +923,14 @@ class GameEngine {
         this.state = 'TITLE';
         this.frame = 0;
         this.loopId = null;
-        
+
         this.input = { up: false, dash: false, action: false };
-        
+
         this.playerConfig = {
             headIdx: 0, bodyIdx: 0, legsIdx: 0,
             color: "#800000", ability: ABILITIES["#800000"]
         };
-        
-        // ★★★ 追加: 結果保存用変数 ★★★
+
         this.currentMode = '';
         this.lastRank = 0;
 
@@ -936,15 +950,15 @@ class GameEngine {
 
         const setupTouch = (id, prop) => {
             const btn = document.getElementById(id);
-            btn.addEventListener('touchstart', (e) => { 
-                e.preventDefault(); 
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
                 this.input[prop] = true;
                 btn.classList.add('active');
                 Sound.init();
                 if (prop === 'dash' && this.state === 'RACE') Sound.playDash();
             });
-            btn.addEventListener('touchend', (e) => { 
-                e.preventDefault(); 
+            btn.addEventListener('touchend', (e) => {
+                e.preventDefault();
                 this.input[prop] = false;
                 btn.classList.remove('active');
             });
@@ -958,6 +972,58 @@ class GameEngine {
             Sound.init();
             Sound.toggleMute();
         });
+
+        // ★ 追加: 全画面切り替え
+        const fsBtn = document.getElementById('fullscreen-switch');
+        const wrapper = document.getElementById('game-wrapper');
+
+        const isFullscreenSupported = () => {
+            return !!(document.fullscreenEnabled && wrapper.requestFullscreen);
+        };
+
+        const updateFsBtn = () => {
+            if (!isFullscreenSupported()) fsBtn.classList.add('disabled');
+            else fsBtn.classList.remove('disabled');
+            fsBtn.innerText = document.fullscreenElement ? "⤢" : "⛶";
+        };
+
+        const showFullscreenHintForIOS = () => {
+            alert(
+                "このブラウザでは全画面表示が制限されています。\n\n" +
+                "iPhoneの場合は\n" +
+                "共有ボタン →「ホーム画面に追加」\n" +
+                "で全画面っぽく遊べます！"
+            );
+        };
+
+        fsBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            Sound.init();
+
+            try {
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                } else {
+                    if (!isFullscreenSupported()) {
+                        showFullscreenHintForIOS();
+                        return;
+                    }
+                    await wrapper.requestFullscreen({ navigationUI: "hide" });
+                }
+            } catch (err) {
+                showFullscreenHintForIOS();
+            } finally {
+                updateFsBtn();
+                resizeGame();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            updateFsBtn();
+            resizeGame();
+        });
+
+        updateFsBtn();
     }
 
     changeState(newState) {
@@ -970,16 +1036,13 @@ class GameEngine {
         if (newState === 'MODE') document.getElementById('screen-mode').classList.remove('hidden');
         if (newState === 'RESULT') {
             document.getElementById('screen-result').classList.remove('hidden');
-            
-            // ★★★ 追加: リザルト画面のボタン分岐処理 ★★★
+
             const btn = document.getElementById('result-btn');
             if (this.currentMode === 'GACHI' && this.lastRank === 1) {
-                // ガチモード1着
                 btn.innerHTML = "👑 ボーナス動画を見る 👑";
                 btn.classList.add("golden");
                 btn.onclick = () => this.showBonusVideo();
             } else {
-                // 通常
                 btn.innerText = "もう一度遊ぶ";
                 btn.classList.remove("golden");
                 btn.onclick = () => this.toTitle();
@@ -990,8 +1053,7 @@ class GameEngine {
             const canShoot = this.playerConfig.ability.type === 'shoot' || this.playerConfig.ability.type === 'god';
             document.getElementById('btn-fire').style.display = canShoot ? 'flex' : 'none';
         }
-        
-        // ★★★ 追加: 動画画面表示処理 ★★★
+
         if (newState === 'BONUS_VIDEO') {
             document.getElementById('screen-bonus-video').classList.remove('hidden');
             const video = document.getElementById('bonus-video');
@@ -1003,24 +1065,23 @@ class GameEngine {
             const video = document.getElementById('bonus-video');
             if(video) video.pause();
         }
-        
+
         Sound.init();
     }
 
     startRace(mode) {
         this.changeState('RACE');
-        this.currentMode = mode; // ★★★ 追加: モード保存
+        this.currentMode = mode;
         this.race = new RaceSession(this, mode, this.playerConfig);
         Sound.stopBGM();
         if (this.loopId) cancelAnimationFrame(this.loopId);
         this.loop();
     }
-    
-    // ★★★ 追加: 動画画面への遷移 ★★★
+
     showBonusVideo() {
         this.changeState('BONUS_VIDEO');
     }
-    
+
     toTitle() {
         this.changeState('TITLE');
         this.race = null;
@@ -1040,21 +1101,16 @@ class GameEngine {
         const pCtx = pCanvas.getContext('2d');
         const render = () => {
             if (this.state === 'CUSTOMIZE') {
-                // 【修正】プレビュー描画調整
-                // 300x200 のCanvas
                 pCtx.clearRect(0, 0, 300, 200);
                 pCtx.fillStyle = "#fff";
                 pCtx.fillRect(0,0,300,200);
-                
-                // グリッド線
+
                 pCtx.strokeStyle = "#eee";
                 pCtx.beginPath();
                 for(let i=0; i<300; i+=20) { pCtx.moveTo(i,0); pCtx.lineTo(i,200); }
                 for(let i=0; i<200; i+=20) { pCtx.moveTo(0,i); pCtx.lineTo(300,i); }
                 pCtx.stroke();
 
-                // 馬を少し縮小(1.7倍)して、位置を少し上に(130)調整して全体が入るようにする
-                // ここでは2.5倍にして描画（図形時）、isPlayer=true
                 drawHorse(pCtx, 135, 100, this.playerConfig, Date.now()/100, 2.5, false, true);
             }
             requestAnimationFrame(render);
@@ -1075,22 +1131,22 @@ class RaceSession {
         this.countDownTimer = 180;
         this.countDownText = "";
 
-        this.goalX = CONFIG.BASE_SPEED * 60 * CONFIG.GAME_DURATION_SEC; 
+        this.goalX = CONFIG.BASE_SPEED * 60 * CONFIG.GAME_DURATION_SEC;
 
         const startX = 100;
         this.player = new Horse(true, pConfig, startX, CONFIG.GROUND_Y);
-        
+
         this.cpus = [
             new Horse(false, {color: "#8b4513", headIdx:2, bodyIdx:2, legsIdx:0, ability: ABILITIES["#8b4513"]}, startX, CONFIG.GROUND_Y),
             new Horse(false, {color: "#ffa500", headIdx:1, bodyIdx:1, legsIdx:1, ability: ABILITIES["#ffa500"]}, startX, CONFIG.GROUND_Y)
         ];
         this.cpus[0].x = startX;
         this.cpus[1].x = startX;
-        
-        // 敵の速度設定
+
+        // ★ 修正: 敵の速度（ガチを少し遅く）
         if (mode === 'GACHI') {
-            this.cpus[0].baseSpeedMod = 1.00; 
-            this.cpus[1].baseSpeedMod = 1.03; 
+            this.cpus[0].baseSpeedMod = 0.98;
+            this.cpus[1].baseSpeedMod = 1.00;
         } else {
             this.cpus[0].baseSpeedMod = 0.90;
             this.cpus[1].baseSpeedMod = 0.98;
@@ -1103,38 +1159,35 @@ class RaceSession {
         this.bubbles = [];
     }
 
-    // ★★★ 先頭に配置して参照エラーを回避 ★★★
     addBubble(x, y, text, color) {
         this.bubbles.push({x, y, text, color, life: 60});
     }
 
-    // ★★★ 先頭に配置して参照エラーを回避 ★★★
     finishRace() {
         this.finished = true;
         Sound.playFanfare();
 
         let rank = 1;
         this.cpus.forEach(c => { if (c.x > this.player.x) rank++; });
-        
-        // ★★★ 追加: 結果保存 ★★★
+
         this.engine.lastRank = rank;
 
         if (rank === 1) {
             const spawnCoins = () => {
-                if (this.engine.state !== 'RACE') return; 
+                if (this.engine.state !== 'RACE') return;
                 for(let i=0; i<3; i++) {
                     const type = Math.random();
-                    if(type < 0.7) { 
+                    if(type < 0.7) {
                         this.particles.push({
                             x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
-                            y: -50 - Math.random() * 50, 
+                            y: -50 - Math.random() * 50,
                             vx: (Math.random()-0.5) * 1,
-                            vy: 5 + Math.random() * 5, 
-                            color: '#ffd700', 
+                            vy: 5 + Math.random() * 5,
+                            color: '#ffd700',
                             life: 300, w: 20, isCoin: true,
                             rot: Math.random() * Math.PI, rotSpeed: (Math.random()-0.5) * 0.2
                         });
-                    } else { 
+                    } else {
                         this.particles.push({
                              x: this.cameraX + Math.random() * CONFIG.CANVAS_WIDTH,
                              y: -50, vx: (Math.random()-0.5)*3, vy: 2 + Math.random()*3,
@@ -1151,8 +1204,7 @@ class RaceSession {
             document.getElementById('result-rank').innerText = `${rank}着！`;
             if (rank === 1) {
                 document.getElementById('result-msg').innerText = "2026 HAPPY NEW YEAR!!";
-                
-                // 賞金の変更
+
                 if (this.mode === 'GACHI') {
                     document.getElementById('result-prize').innerText = "2026億";
                 } else {
@@ -1163,7 +1215,7 @@ class RaceSession {
                 document.getElementById('result-prize').innerText = "0";
             }
             Game.toResult();
-        }, 5000); 
+        }, 5000);
     }
 
     generateLevel() {
@@ -1172,7 +1224,7 @@ class RaceSession {
 
         while(x < this.goalX - 800) {
             x += density + Math.random() * 500;
-            
+
             const type = Math.random();
             if (type < 0.20) {
                 this.entities.push({type: 'obstacle', x: x, y: CONFIG.GROUND_Y - 40, w: 40, h: 40, hit: false});
@@ -1184,10 +1236,10 @@ class RaceSession {
                 this.entities.push({type: 'enemy_moving', x: x, y: CONFIG.GROUND_Y - 60, w: 60, h: 60, alive: true, vx: -1});
             } else {
                 const rand = Math.random();
-                let itemType = 'carrot'; 
+                let itemType = 'carrot';
                 if (rand < 0.2) itemType = 'drink';
-                else if (rand < 0.4) itemType = 'big'; 
-                else if (rand < 0.6) itemType = 'small'; 
+                else if (rand < 0.4) itemType = 'big';
+                else if (rand < 0.6) itemType = 'small';
                 else if (rand > 0.85) itemType = 'bone';
                 this.entities.push({type: 'item', kind: itemType, x: x, y: CONFIG.GROUND_Y - 80 - Math.random()*80, w: 40, h: 40, taken: false});
             }
@@ -1215,10 +1267,10 @@ class RaceSession {
         }
 
         this.frame++;
-        
+
         const effectiveInput = this.finished ? { up: false, dash: false, action: false } : input;
         const playerSpeedMod = this.finished ? 0.95 : 1.0;
-        
+
         const shootReq = this.player.update(effectiveInput, this.entities, playerSpeedMod, this.frame);
         if (shootReq) {
             Sound.playShoot();
@@ -1242,13 +1294,13 @@ class RaceSession {
                 speedMod = 0.95;
             } else {
                 const viewDist = 180;
-                const obstacleAhead = this.entities.some(e => 
+                const obstacleAhead = this.entities.some(e =>
                     (e.type === 'obstacle' || e.type === 'pit' || (e.type.startsWith('enemy') && e.alive)) &&
                     e.x > cpu.x && e.x < cpu.x + viewDist
                 );
                 if (obstacleAhead && cpu.onGround) jump = true;
 
-                if (cpu.stamina > (this.mode === 'GACHI' ? 10 : 30)) dash = true; 
+                if (cpu.stamina > (this.mode === 'GACHI' ? 10 : 30)) dash = true;
                 if (cpu.stamina < 5) dash = false;
 
                 if (this.mode === 'HAPPY') {
@@ -1257,9 +1309,9 @@ class RaceSession {
                         if (cpu.x > this.goalX - 300) {
                             cpu.vx = -2; cpu.stamina = 0;
                         } else {
-                            cpu.vx = 0; 
+                            cpu.vx = 0;
                         }
-                        speedMod = 0.5; 
+                        speedMod = 0.5;
                         if (this.frame % 120 === 0) {
                             const accidents = [ "トイレ行きたい", "あ、UFOだ", "Zzz...", "馬刺し食べて〜"];
                             const msg = accidents[Math.floor(Math.random() * accidents.length)];
@@ -1296,11 +1348,11 @@ class RaceSession {
 
                 if (checkRectCollide(this.player, e)) {
                     const isGhost = this.player.config.ability.type === 'ghost' || this.player.config.ability.type === 'god';
-                    
+
                     if (e.type === 'pit') {
                         if (this.player.y > CONFIG.GROUND_Y && !this.player.invincible && this.player.config.ability.type !== 'god') {
                             this.player.damage();
-                            this.player.vy = -15; 
+                            this.player.vy = -15;
                             Sound.playHit();
                         }
                     } else if (e.type === 'item' && !e.taken) {
@@ -1323,9 +1375,9 @@ class RaceSession {
                         } else if (e.type.startsWith('enemy') && e.alive) {
                             if (isStomp || this.player.invincible) {
                                 e.alive = false;
-                                this.player.vy = -10; 
+                                this.player.vy = -10;
                                 this.player.stamina = Math.min(CONFIG.MAX_STAMINA, this.player.stamina + 15);
-                                this.addBubble(this.player.x, this.player.y - 60, "うまい！", "#ffeb3b"); 
+                                this.addBubble(this.player.x, this.player.y - 60, "うまい！", "#ffeb3b");
                                 Sound.playItem('good');
                                 for(let i=0; i<15; i++) this.particles.push({x: e.x+e.w/2, y: e.y+e.h/2, vx: (Math.random()-0.5)*12, vy: (Math.random()-0.5)*12, color: '#fff', life: 30, w: 6});
                             } else {
@@ -1341,10 +1393,10 @@ class RaceSession {
         this.bubbles = this.bubbles.filter(b => b.life > 0);
         this.bubbles.forEach(b => { b.life--; b.y -= 0.5; });
 
-        this.particles.forEach(p => { 
-            p.x += p.vx; p.y += p.vy; 
+        this.particles.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
             if(p.isCoin) { p.vy += 0.3; p.rot += p.rotSpeed; }
-            p.life--; 
+            p.life--;
         });
         this.particles = this.particles.filter(p => p.life > 0);
 
@@ -1354,17 +1406,17 @@ class RaceSession {
     draw(ctx) {
         ctx.fillStyle = "#87CEEB";
         ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
-        
+
         ctx.save();
         ctx.translate(-this.cameraX * 0.5, 0);
-        ctx.fillStyle = "#e0e0e0"; 
+        ctx.fillStyle = "#e0e0e0";
         ctx.fillRect(0, 100, this.goalX + 2000, 250);
         const crowdStartX = Math.floor((this.cameraX * 0.5) / 20) * 20 - 100;
         const crowdEndX = crowdStartX + CONFIG.CANVAS_WIDTH + 200;
         for (let row = 0; row < 6; row++) {
             const rowY = 120 + row * 30;
             for (let cx = crowdStartX; cx < crowdEndX; cx += 15) {
-                const seed = (cx * 1.3 + row * 7.1 + Math.floor(cx/1000)); 
+                const seed = (cx * 1.3 + row * 7.1 + Math.floor(cx/1000));
                 const hue = Math.abs(Math.sin(seed) * 360);
                 ctx.fillStyle = `hsl(${hue}, 70%, 60%)`;
                 const jump = (Math.sin(this.frame * 0.1 + cx) > 0.8) ? 3 : 0;
@@ -1382,7 +1434,7 @@ class RaceSession {
         ctx.fillRect(0, CONFIG.GROUND_Y, this.goalX + 2000, 200);
         ctx.fillStyle = "#4caf50";
         ctx.fillRect(0, CONFIG.GROUND_Y, this.goalX + 2000, 15);
-        
+
         for(let d=0; d<this.goalX; d+=1000) {
             ctx.fillStyle = "rgba(255,255,255,0.5)";
             ctx.fillRect(d, CONFIG.GROUND_Y+15, 10, 50);
@@ -1399,8 +1451,8 @@ class RaceSession {
             if (e.x < this.cameraX - 100 || e.x > this.cameraX + 900) return;
 
             if (e.type === 'obstacle' && !e.hit) {
-                ctx.fillStyle = "#d32f2f"; ctx.fillRect(e.x, e.y, e.w, e.h); 
-                ctx.fillStyle = "#fff"; ctx.fillRect(e.x, e.y, e.w, 10); 
+                ctx.fillStyle = "#d32f2f"; ctx.fillRect(e.x, e.y, e.w, e.h);
+                ctx.fillStyle = "#fff"; ctx.fillRect(e.x, e.y, e.w, 10);
             } else if (e.type === 'pit') {
                 ctx.fillStyle = "#222"; ctx.fillRect(e.x, e.y, e.w, 100);
             } else if (e.type === 'enemy_static' && e.alive) {
@@ -1412,13 +1464,13 @@ class RaceSession {
                 ctx.fillStyle = "#555";
                 ctx.fillRect(bx+10, by+10, bw-20, bh-10); ctx.fillRect(bx+15, by, 30, 20);
                 ctx.fillRect(bx+10, by-5, 10, 10); ctx.fillRect(bx+40, by-5, 10, 10);
-                ctx.fillRect(bx, by, 10, 30); ctx.fillRect(bx+bw-10, by, 10, 30); 
+                ctx.fillRect(bx, by, 10, 30); ctx.fillRect(bx+bw-10, by, 10, 30);
                 ctx.fillStyle = "#fbc02d";
                 ctx.fillRect(bx, by-5, 3, 5); ctx.fillRect(bx+3, by-5, 3, 5); ctx.fillRect(bx+6, by-5, 3, 5);
                 ctx.fillStyle = "#555"; ctx.fillRect(bx+10, by+bh-5, 15, 10);
                 ctx.fillStyle = "#d32f2f"; ctx.fillRect(bx+23, by+15, 14, 10);
             } else if (e.type === 'item' && !e.taken) {
-                ctx.font = "40px Arial"; 
+                ctx.font = "40px Arial";
                 let icon = "🥕";
                 if(e.kind==='bone') icon="🍖"; if(e.kind==='drink') icon="🥤";
                 if(e.kind==='big') icon="🍄"; if(e.kind==='small') icon="🧁";
@@ -1449,7 +1501,7 @@ class RaceSession {
             if (p.isCoin) {
                 ctx.save();
                 ctx.translate(p.x, p.y);
-                ctx.scale(Math.cos(p.rot), 1); 
+                ctx.scale(Math.cos(p.rot), 1);
                 ctx.fillStyle = p.color;
                 ctx.beginPath(); ctx.arc(0, 0, p.w/2, 0, Math.PI*2); ctx.fill();
                 ctx.strokeStyle = "#b8860b"; ctx.lineWidth = 2; ctx.stroke();
@@ -1498,62 +1550,47 @@ class RaceSession {
     }
 }
 
-// ★★★ 描画ロジックの修正: ハイブリッド描画システム ★★★
-// 画像があれば画像を表示し、なければ図形を描画する安全設計
-function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) { // isPlayerを追加
+function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
     ctx.save();
     ctx.translate(x, y);
-    
-    // 画像アセットの取得
+
     const headImg = ASSETS.head[config.headIdx];
     const bodyImg = ASSETS.body[config.bodyIdx];
     const legsImg = ASSETS.legs[config.legsIdx];
 
-    // ★ 画像が「全て」正常にロード完了しているかチェック
     const isLoaded = (img) => img && img.complete && img.naturalHeight !== 0;
-    // ★★★ 修正: プレイヤーかつ全画像がロードされている場合のみ画像モードにする
     const hasImage = isPlayer && isLoaded(headImg) && isLoaded(bodyImg) && isLoaded(legsImg);
 
     let currentScale = scale;
-    if (hasImage) {
-        // 画像がある場合は大きすぎるので縮小
-        currentScale = scale * CONFIG.BASE_IMAGE_SCALE;
-    }
+    if (hasImage) currentScale = scale * CONFIG.BASE_IMAGE_SCALE;
     ctx.scale(currentScale, currentScale);
-    
-    // 跳ねる動き
-    let bounce = Math.sin(frame * 0.5) * (hasImage ? 50 : 5); 
+
+    let bounce = Math.sin(frame * 0.5) * (hasImage ? 50 : 5);
     if (isTired) bounce *= 0.2;
     ctx.translate(0, bounce);
 
     const c = config.color;
 
-    // --- 描画分岐 ---
     if (hasImage) {
-        // 【画像モード】
-        // 重ね順: 足 -> 体 -> 頭
         drawPartImage(ctx, legsImg, c);
         drawPartImage(ctx, bodyImg, c);
-        
+
         ctx.save();
         if (isTired) ctx.rotate(Math.PI / 6);
         drawPartImage(ctx, headImg, c);
-        
+
         if (isTired) {
             ctx.fillStyle = "#00f";
             ctx.font = "100px sans-serif";
             ctx.fillText("💦", 100, 0);
         }
         ctx.restore();
-
     } else {
-        // 【図形モード (フォールバック)】
-        // 従来通りの描画ロジック
-        ctx.fillStyle = "#000"; 
+        ctx.fillStyle = "#000";
         let legSpeed = isTired ? 0.2 : 0.5;
         if (config.ability.type === 'god') legSpeed = 1.0;
         const legOffset = Math.sin(frame * legSpeed) * 10;
-        
+
         drawPartShape(ctx, config.legsIdx, -10 + legOffset, 30, c, 10, 20);
         drawPartShape(ctx, config.legsIdx, 30 - legOffset, 30, c, 10, 20);
 
@@ -1563,7 +1600,7 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
         ctx.save();
         if (isTired) ctx.rotate(Math.PI / 6);
         drawPartShape(ctx, config.headIdx, 30, -10, c, 25, 25);
-        
+
         ctx.fillStyle = "#fff";
         ctx.beginPath(); ctx.arc(45, 0, 5, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = "#000";
@@ -1573,7 +1610,7 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
             ctx.beginPath(); ctx.arc(47, 0, 2, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
-        
+
         if (isTired) {
             ctx.fillStyle = "#00f";
             ctx.font = "12px sans-serif";
@@ -1587,31 +1624,24 @@ function drawHorse(ctx, x, y, config, frame, scale, isTired, isPlayer = false) {
     ctx.restore();
 }
 
-// ★★★ 画像の色変え描画関数 (Source-in合成) ★★★
 function drawPartImage(ctx, img, color) {
-    // 1. バッファをクリア
     bCtx.clearRect(0, 0, bufferCanvas.width, bufferCanvas.height);
-    
-    // 2. 画像をバッファに描画
+
     bCtx.drawImage(img, 0, 0);
-    
-    // 3. 色を source-in で合成 (シルエットを色で塗りつぶす)
+
     bCtx.globalCompositeOperation = 'source-in';
     bCtx.fillStyle = color;
     bCtx.fillRect(0, 0, bufferCanvas.width, bufferCanvas.height);
-    
-    // 設定を戻す
-    bCtx.globalCompositeOperation = 'source-over'; 
 
-    // 4. メインキャンバスに描画 (中心合わせ)
+    bCtx.globalCompositeOperation = 'source-over';
+
     ctx.drawImage(bufferCanvas, -bufferCanvas.width/2, -bufferCanvas.height/2);
 }
 
-// ★★★ 図形描画関数 (旧 drawPart) ★★★
 function drawPartShape(ctx, typeIdx, x, y, color, w, h) {
     if (color === '#gold') ctx.fillStyle = `hsl(50, 100%, ${50 + Math.sin(Date.now()/200)*20}%)`;
     else ctx.fillStyle = color;
-    
+
     if (typeIdx === 0) { ctx.fillRect(x, y, w, h); }
     else if (typeIdx === 1) { ctx.beginPath(); ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI*2); ctx.fill(); }
     else if (typeIdx === 2) { ctx.beginPath(); ctx.moveTo(x, y+h); ctx.lineTo(x+w/2, y); ctx.lineTo(x+w, y+h); ctx.fill(); }
@@ -1657,7 +1687,7 @@ const Customizer = {
     },
     setColor: (color, isSecret = false) => {
         if (isSecret) {
-            Game.playerConfig.color = '#gold'; 
+            Game.playerConfig.color = '#gold';
             Game.playerConfig.ability = ABILITIES["SECRET"];
             document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
             document.getElementById(`btn-secret`).classList.add('selected');
@@ -1667,7 +1697,7 @@ const Customizer = {
             document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
             document.getElementById(`btn-${color}`).classList.add('selected');
         }
-        
+
         let desc = Game.playerConfig.ability.name;
         if (Game.playerConfig.ability.desc) {
              desc += `<br><span style="font-size:0.8em; color:#555;">${Game.playerConfig.ability.desc}</span>`;
@@ -1677,7 +1707,6 @@ const Customizer = {
 };
 
 window.onload = () => {
-    // カラーパレット生成
     const palette = document.getElementById('color-palette');
     PALETTE_COLORS.forEach(c => {
         const btn = document.createElement('div');
@@ -1692,9 +1721,9 @@ window.onload = () => {
     secretBtn.id = 'btn-secret';
     secretBtn.onclick = () => Customizer.setColor(null, true);
     palette.appendChild(secretBtn);
-    
+
     Customizer.setColor(PALETTE_COLORS[0]);
-    
+
     window.Game = Game;
     window.Customizer = Customizer;
     Game.toCustomize = () => Game.changeState('CUSTOMIZE');
@@ -1705,7 +1734,6 @@ window.onload = () => {
     Game.showHowTo = () => document.getElementById('screen-howto').classList.remove('hidden');
     Game.hideHowTo = () => document.getElementById('screen-howto').classList.add('hidden');
 };
-
 </script>
 </body>
 </html>
